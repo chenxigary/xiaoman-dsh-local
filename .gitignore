@@ -22,8 +22,13 @@ ref_audio.*
 
 # ---- Scratch / temp artifacts ----
 *.bak
+*.log
 tts_out.wav
 *.local.json
+.run/
+logs/
+.runtime/
+runtime/
 
 # ---- OS ----
 .DS_Store

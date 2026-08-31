@@ -35,6 +35,33 @@
   opacity: 0;
 }
 
+/* The migrated five-second idle clip is intentionally subtle (mostly eyes).
+   A slow, small breathing drift keeps the companion visibly alive without
+   fighting Wav2Lip mouth motion; the class is removed while speaking. */
+.video.idleMotion {
+  transform-origin: 62% 58%;
+  animation: companionIdleBreathing 5.2s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes companionIdleBreathing {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1.006);
+  }
+  52% {
+    transform: translate3d(-0.12%, -0.38%, 0) scale(1.016);
+  }
+  100% {
+    transform: translate3d(0.16%, -0.72%, 0) scale(1.024);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video.idleMotion {
+    animation: none;
+  }
+}
+
 /* Left-edge column: the inner (right) edge fades instead. */
 .companion.left .video {
   -webkit-mask-image: linear-gradient(to left,
@@ -49,6 +76,14 @@
     rgba(10, 11, 16, 0.36) 38%,
     rgba(10, 11, 16, 0.66) 60%,
     rgba(10, 11, 16, 0.95) 100%);
+}
+
+/* Keep the opaque composer and every control above the decorative avatar.
+   The host exposes this stable data attribute specifically at the card seam;
+   targeting it avoids depending on generated CSS module class names. */
+:global([data-composer-card="true"]) {
+  position: relative;
+  z-index: 50;
 }
 
 /* Inner-edge drag handle: the only interactive part of the overlay. */

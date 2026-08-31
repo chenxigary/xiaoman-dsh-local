@@ -1,0 +1,30 @@
+{
+  "profile_id": "xiaoman-v3-original-idle",
+  "state": "idle",
+  "files": {
+    "video": "idle.mp4",
+    "poster": "poster.png"
+  },
+  "file_sha256": {
+    "idle.mp4": "3b0406e105f2b9800811507b4b4b63d7e695f03dd79a0c93d9e239ec61b08d51",
+    "poster.png": "8823e17ac34db860c8de0b13548a283b8e64cce5d59cc3885136b6c01408bb8c"
+  },
+  "video": {
+    "width": 704,
+    "height": 896,
+    "fps": 25,
+    "frames": 127,
+    "duration_seconds": 5.08,
+    "audio": false,
+    "codec": "h264",
+    "pixel_format": "yuv420p"
+  },
+  "provenance": {
+    "source_profile": "xiaoman-v3/profiles/avatars/xiaoman-v3-original-idle",
+    "source_manifest_sha256": "de5e0a0f08fb9bf57b34bbabe515ef6b6ec4509210a6b1b98c3c560aa1314208",
+    "source_sha256": "3b0406e105f2b9800811507b4b4b63d7e695f03dd79a0c93d9e239ec61b08d51",
+    "usage_rights": "user-confirmed-authorized-for-this-project",
+    "confirmed_by_user_on": "2026-08-10",
+    "reuse_audit_version": "2026-08-17"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "profile_id": "original-ref-v1",
+  "kind": "confirmed_runtime_voice_profile",
+  "files": {
+    "audio": "ref.wav",
+    "text": "ref.txt"
+  },
+  "file_sha256": {
+    "ref.wav": "7aec6eae5c1b49209b3425fe295eeae62d3692c8b2ca419a24185aa8a3593dc7",
+    "ref.txt": "0f8521518d1bbbaa6a0dfa235b9f5f67b1fdfa2b9502c059a6c367f52c95f2e1"
+  },
+  "audio": {
+    "format": "PCM16 WAV",
+    "sample_rate_hz": 24000,
+    "channels": 1,
+    "duration_seconds": 9.377958,
+    "sha256": "7aec6eae5c1b49209b3425fe295eeae62d3692c8b2ca419a24185aa8a3593dc7"
+  },
+  "provenance": {
+    "source_profile": "xiaoman-v3/profiles/voices/original-ref-v1",
+    "source_manifest_sha256": "cd9ff27f55240cfd9c2de38d9ec5c868216f365c128b20672363e1c2861017f7",
+    "usage_rights": "user-confirmed-authorized-for-this-project",
+    "confirmed_by_user_on": "2026-08-10",
+    "reuse_audit_version": "2026-08-17"
+  },
+  "model_scope": [
+    "mlx-community/OmniVoice-bf16",
+    "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit"
+  ]
+}

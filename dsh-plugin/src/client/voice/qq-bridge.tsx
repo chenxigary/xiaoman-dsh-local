@@ -13,23 +13,20 @@
  * to connect otherwise (silent, no UI).
  */
 import { memo, useEffect, useRef } from 'react'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-conversation's SlotMap merge for PropsRuntime resolution.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { AssistantChatData } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { bridgeBase } from '../bridge.ts'
 import type { VoiceInjected } from '../contract.ts'
-import { readQqPush } from '../QqPushToggle.tsx'
+import type { VoiceStoreHandle } from '../agent-mode.ts'
+import { readQqPush } from './qq-settings.ts'
 import { cleanReplyText } from './clean.ts'
+import { acceptsQqInbound, acceptsQqOutbound } from './qq-gate.ts'
+import { MAX_QQ_TEXT_CHARS } from './qq-owner.ts'
 
 /** Full props: framework runtime share + `voice` locale seat + injected face. */
-export type QQBridgeProps = PropsRuntime<'conversation.input.left'> & PropsLocale<'voice'> & VoiceInjected
+export type QQBridgeProps = PropsRuntime<'conversation.input.left'> & PropsStore<VoiceStoreHandle> & PropsLocale<'voice'> & VoiceInjected
 
-function qqWsUrl(): string {
-  const base = bridgeBase()
-  const proto = base.startsWith('https:') ? 'wss:' : 'ws:'
-  return `${proto}//${base.replace(/^https?:\/\//, '')}/api/qq/ws`
-}
 
 function assistantData(node: { kind: string; data: unknown }): AssistantChatData | undefined {
   if (node.kind !== 'assistant-step') return undefined
@@ -46,48 +43,49 @@ function nodeText(data: AssistantChatData): string {
 /**
  * @param props - framework runtime + locale + injected sendText.
  */
-export const QQBridge = memo(function QQBridge({ useSession, sendText }: QQBridgeProps) {
-  const wsRef = useRef<WebSocket | null>(null)
+export const QQBridge = memo(function QQBridge({ useSession, useStore, sendText, sessionId, registerQqSession, sendQqReply }: QQBridgeProps) {
   const lastReplyAnchorRef = useRef(0)
+  const baselineOwnerRef = useRef<string | undefined>(undefined)
+  const baselineReadyRef = useRef(false)
   const snapshot = useSession((s) => s)
+  const mode = useStore(state => state.mode)
+  const modeRef = useRef(mode)
+  modeRef.current = mode
 
-  // WS connect with auto-reconnect (3s). Only one tab should run this (the
-  // bridge itself replaces stale connections).
+  // The apply-level owner gives this session the active route. It owns the
+  // only socket and validates frame/text caps before this callback runs.
   useEffect(() => {
-    let closed = false
-    let ws: WebSocket | null = null
-    const connect = () => {
-      if (closed) return
-      ws = new WebSocket(qqWsUrl())
-      ws.onopen = () => { wsRef.current = ws }
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(String(event.data)) as { type?: string; text?: string }
-          if (msg.type === 'qq_message' && typeof msg.text === 'string' && msg.text.trim() !== '') {
-            void sendText(msg.text.trim()).catch((err) => {
-              console.error('[ui-voice] qq inject failed:', err)
-            })
-          }
-        } catch {
-          // malformed frame — ignore
-        }
+    const release = registerQqSession(sessionId, text => {
+      if (text === '') return
+      // QQ has no authenticated DSH session identity. Never route an inbound
+      // message through native session.prompt in Codex mode.
+      if (!acceptsQqInbound(modeRef.current, sessionId)) {
+        console.info('[ui-voice] Codex 模式已禁用 QQ 入站消息：缺少安全会话身份')
+        return
       }
-      ws.onclose = () => {
-        if (wsRef.current === ws) wsRef.current = null
-        if (!closed) setTimeout(connect, 3000)
-      }
-    }
-    connect()
-    return () => {
-      closed = true
-      if (ws !== null) { try { ws.close() } catch { /* already closed */ } }
-    }
-  }, [sendText])
+      void sendText(text).catch(() => {
+        console.error('[ui-voice] QQ 消息发送失败')
+      })
+    })
+    return release
+  }, [registerQqSession, sendText, sessionId])
 
   // New settled assistant reply -> push text to the bridge (it voices it to QQ).
   // Skips entirely when the QQ push toggle is off.
   useEffect(() => {
     if (!readQqPush()) return
+    if (baselineOwnerRef.current !== sessionId) {
+      baselineOwnerRef.current = sessionId
+      baselineReadyRef.current = false
+      lastReplyAnchorRef.current = 0
+    }
+    if (!acceptsQqOutbound(mode, sessionId) || snapshot.openState !== 'open') {
+      // A Codex owner can never emit a native QQ reply.  Deferring the
+      // baseline until DSH hydration also prevents remounts from replaying
+      // the existing history.
+      baselineReadyRef.current = false
+      return
+    }
     let maxAnchor = 0
     let newest: { anchor: number; text: string } | null = null
     for (const node of snapshot.chat.nodes.values()) {
@@ -96,20 +94,21 @@ export const QQBridge = memo(function QQBridge({ useSession, sendText }: QQBridg
       if (data === undefined || data.status !== 'settled') continue
       if (node.anchorSeq > maxAnchor) {
         maxAnchor = node.anchorSeq
-        newest = { anchor: node.anchorSeq, text: cleanReplyText(nodeText(data), 100000) }
+        newest = { anchor: node.anchorSeq, text: cleanReplyText(nodeText(data), MAX_QQ_TEXT_CHARS) }
       }
+    }
+    if (!baselineReadyRef.current) {
+      lastReplyAnchorRef.current = maxAnchor
+      baselineReadyRef.current = true
+      return
     }
     if (newest !== null && newest.anchor > lastReplyAnchorRef.current) {
-      lastReplyAnchorRef.current = newest.anchor
       const text = newest.text.trim()
-      if (text !== '') {
-        const ws = wsRef.current
-        if (ws !== null && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'reply', text }))
-        }
+      if (text !== '' && sendQqReply(String(sessionId), text)) {
+        lastReplyAnchorRef.current = newest.anchor
       }
     }
-  }, [snapshot])
+  }, [mode, sendQqReply, sessionId, snapshot])
 
   return null
 })

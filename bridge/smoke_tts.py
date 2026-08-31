@@ -3,7 +3,7 @@
 Sends a Chinese sentence to POST /api/tts, saves the returned WAV to
 tts_out.wav (play it to check the Xiaoya voice clone), and prints metadata.
 Usage:
-  venv-speech\\Scripts\\python.exe smoke_tts.py [--text "你好，我是小雅，很高兴认识你"] [--out tts_out.wav]
+  .venv/bin/python smoke_tts.py [--text "你好，我是小雅，很高兴认识你"] [--out tts_out.wav]
 """
 
 import argparse
@@ -16,12 +16,14 @@ from pathlib import Path
 
 import numpy as np
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:8765/api/tts")
     ap.add_argument("--text", default="你好，我是小雅，很高兴认识你。今天想聊点什么呢？")
-    ap.add_argument("--out", default=r"D:\speech-to-speech\tts_out.wav")
+    ap.add_argument("--out", default=str(REPO_ROOT / "tts_out.wav"))
     args = ap.parse_args()
 
     req = urllib.request.Request(

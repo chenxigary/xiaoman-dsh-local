@@ -1,0 +1,11 @@
+{
+  "namespace": "xiaoman",
+  "states": {
+    "idle": "../idle",
+    "listening": "../listening",
+    "thinking": "../thinking",
+    "speaking": "../speaking"
+  },
+  "fallback": "idle",
+  "note": "Only idle has a verified migrated binary asset at this time."
+}

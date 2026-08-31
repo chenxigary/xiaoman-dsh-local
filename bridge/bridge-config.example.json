@@ -2,41 +2,61 @@
   "host": "127.0.0.1",
   "port": 8765,
   "cors_origins": ["http://127.0.0.1:3080", "http://localhost:3080"],
+  "voice_runtime": {
+    "mode": "v3",
+    "base_url": "http://127.0.0.1:7860",
+    "connect_timeout_sec": 2.0,
+    "request_timeout_sec": 600.0
+  },
   "stt": {
-    "backend": "funasr",
-    "model_name": "models/funasr/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-    "device": "cuda",
-    "torch_dtype": "float16",
-    "compile_mode": null,
+    "backend": "xiaoman",
+    "model_name": "mlx-community/whisper-large-v3-turbo-asr-fp16",
+    "device": "auto",
     "language": "zh",
-    "gen_kwargs": {
-      "max_new_tokens": 128,
-      "num_beams": 2,
-      "return_timestamps": false,
-      "task": "transcribe"
-    }
+    "sample_rate_hz": 16000
   },
   "tts": {
-    "model_name": "C:/你的QwenTTS模型目录/Qwen3-TTS-12Hz-1.7B-Base",
-    "device": "cuda",
-    "dtype": "auto",
-    "attn_implementation": "eager",
-    "ref_audio": "ref_audio.wav",
-    "ref_text": "你的参考音频对应的文字（录音时照着读的台词）",
+    "backend": "xiaoman",
+    "model_name": "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit",
+    "device": "auto",
+    "ref_audio": "assets/xiaoman/voice/ref.wav",
+    "ref_text": "靠杯啦,你终于上线了我既开心又有点怨你小雅一个人在这里等你等得都快委屈死了",
     "language": "zh",
-    "speaker": null,
-    "xvec_only": false,
-    "parity_mode": false,
-    "non_streaming_mode": true,
-    "max_new_tokens": 1536,
-    "blocksize": 512
+    "max_tokens": 2048,
+    "streaming_interval": 0.32
+  },
+  "xiaoman": {
+    "enabled": true,
+    "character": "xiaoman",
+    "provider_config": "assets/xiaoman/config/providers.json",
+    "stt_provider": "mac-mlx-whisper",
+    "tts_provider": "qwen3"
   },
   "media": {
     "bg_images_dir": "assets/bg-images",
     "task_videos_dir": "assets/task-videos"
   },
+  "latency": {
+    "enabled": true,
+    "sample_rate": 1.0
+  },
+  "codex": {
+    "enabled": false,
+    "command": ["codex", "app-server", "--stdio"],
+    "runtime_state": "runtime/codex-thread-map.json",
+    "execution_home": "runtime/codex-execution-home",
+    "workspace": ".",
+    "sandbox": "read-only",
+    "approval_policy": "never",
+    "expected_cli_version": "0.149.0-alpha.4.1",
+    "startup_timeout_sec": 15,
+    "request_timeout_sec": 30,
+    "turn_timeout_sec": 1800,
+    "subscriber_queue_size": 256
+  },
   "qq": {
     "enabled": false,
+    "owner_token": "",
     "napcat_base": "http://127.0.0.1:3000",
     "napcat_token": "你的NapCat OneBot token",
     "target_qq": 0

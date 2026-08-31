@@ -1,0 +1,15 @@
+.root {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.6rem 0.75rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.toolbar { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.toolbar :global(button), .toolbar :global(select) { flex: 0 0 auto; }
+.ambient { position: absolute; width: 0; height: 0; overflow: visible; pointer-events: none; }
+
+.heading { font-size: 0.78rem; opacity: 0.72; }
+.input { width: 100%; resize: vertical; min-height: 2.5rem; }
+.actions { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; }
+.actions span { color: #b33; }

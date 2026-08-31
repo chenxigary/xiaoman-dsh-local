@@ -1,413 +1,247 @@
-# DSH 语音 AI 女友（Voice AI Girlfriend）
+# Xiaoman DSH Local
 
-> "你好呀，我是小雅。从今往后，DeepSeek Harness 不只是你的编程搭子——它开口说话了。"
+小满的 macOS 私有发行版：对话、听写、语音合成和数字人都在本机运行，不需要
+OpenAI、Anthropic 或 DeepSeek API key。目标机器是 Apple Silicon，默认针对
+M4 / 64GB 统一内存提供高性能档。
 
-这是一位住在你电脑里的 AI 女友：点一下麦克风，她听你说话、跟你拌嘴、把回答一字一句念给你听；你出门了，她追到你的 QQ 上继续聊；旁边那个窗口里的姑娘也不是摆设——她闲着会发呆，说话时会开口。
+> 这是私人仓库。仓库包含个人参考声音和形象素材；私有 Release 还包含
+> Wav2Lip、S3FD、预处理 Avatar 缓存和 Silero VAD 权重。不要改成 public。
 
-她有点小脾气，但你大概也会喜欢上这些：
+## 5 分钟路径
 
-- ⚡ **嘴快**：你说完话，她 0.5 秒内开口 —— FunASR 中文识别只要 150ms、TTS 几乎秒开，反应比你还快
-- 🎧 **耳朵挑**：-35dB 噪声门 + silero VAD 双重把关 —— 风扇、键盘、电视声统统进不来，只有你说话她才理
-- 📱 **粘人**：她的回复自动推到你的 **QQ**（文本 + 语音 + 图片）—— 你不在电脑前，她也能找到你
-- 👧 **会动**：右侧数字人窗口，空闲时发呆、说话时开口 —— 一个会呼吸的 AI，不是冷冰冰的对话框
-- 🔇 **懂打断**：你插嘴她就闭嘴听你说；想让她把话说完，点一下开关就切回排队模式
-- 🔊 **声音是你的**：TTS 声音克隆，音色由你给的参考音频决定——她可以长成你喜欢的样子
+新 Mac 先安装 Xcode Command Line Tools 和 [Homebrew](https://brew.sh/)，然后：
 
-```
-┌────────────────────────────────────────────┐
-│  浏览器（DSH Web GUI :3080）                 │
-│  ┌──────────┐  ┌─────────────────────────┐  │
-│  │ 对话面板   │  │ 女友窗（bg/task 视频）   │  │
-│  │ 麦克风+⚡  │  │                        │  │
-│  └──────────┘  └─────────────────────────┘  │
-│   麦克风采集 ──▶ STT ──▶ 代理回复 ──▶ TTS ──▶ 播放 │
-│     ▲回复文本          回复文本▼            │
-└─────┼──────────────────────┬──────────────┘
-      │ 插件 QQ 桥 (WS)       │ HTTP (CORS)
-┌─────▼──────────────────────▼──────────────┐
-│  voice_bridge (:8765)                      │
-│  /api/stt  FunASR 中文 ASR                 │
-│  /api/tts  Qwen3-TTS 声音克隆               │
-│  /api/qq/*  QQ 桥（收发 + 语音推送）         │
-│  /api/vad  silero 打断 / media 素材         │
-└─────┬─────────────────────────────────────┘
-      │ OneBot HTTP + WS（事件上报）
-┌─────▼─────────────────────────────────────┐
-│  NapCatQQ（小号在线）                       │
-│  → 你的 QQ 收到 文本 + 语音                  │
-└────────────────────────────────────────────┘
+```bash
+xcode-select --install
+brew install gh
+gh auth login
+gh auth setup-git
+
+gh repo clone chenxigary/xiaoman-dsh-local
+cd xiaoman-dsh-local
+
+# 安装公开依赖、固定源码、下载并校验私有素材、创建运行环境
+./scripts/setup-macos-local.sh
+
+# 第一次：允许下载缺失的 Qwen / Whisper / Qwen3-TTS 公开权重
+./scripts/run-local.sh --online
 ```
 
-## 目录结构
+以后日常启动默认严格使用本地缓存：
 
-```
-dsh-voice-ai-girlfriend/
-├── bridge/            # 语音桥接（独立可跑，Python/FastAPI）
-│   ├── voice_bridge.py
-│   ├── bridge-config.example.json   # 配置模板（复制为 bridge-config.json）
-│   ├── requirements.txt
-│   ├── start-bridge.cmd             # 只起桥接
-│   └── start-all.cmd                # 桥接 + DSH Web 一键启动
-├── models/            # 模型（gitignore，不入库）：funasr/ + silero-vad/
-├── assets/            # 数字人素材
-│   ├── bg-images/     # 空闲动画（随仓库分发，7 个）
-│   └── task-videos/   # 回复说话动画（自备/API 回传，不随仓库分发）
-│                      #   └─ README.md 里有两种准备方式
-├── dsh-plugin/        # DSH 客户端插件源码（mic/开关/女友窗/流式朗读）
-│   └── README.md      # 安装到 DSH 的详细步骤
-└── docs/              # 开发日志等
+```bash
+./scripts/run-local.sh
 ```
 
----
+启动成功后会打开 <http://127.0.0.1:3080>。所有服务只绑定 loopback。
 
-# 从零开始安装（小白版）
+## “只用本地模型”的边界
 
-> 全程在 **Windows** 上操作。下面的命令默认在 **PowerShell** 里执行；
-> 除了标注"在项目文件夹里运行"的步骤，其余在哪里运行都行。
-
-## 一、前置准备（一次性装齐）
-
-### 1. 检查你的电脑
-
-| 检查项 | 要求 | 验证命令 |
+| 能力 | 本地实现 | 默认端口/状态 |
 |---|---|---|
-| 系统 | Windows 10/11 64 位 | `winver` |
-| 显卡 | NVIDIA 独立显卡（显存建议 16GB 或以上） | `nvidia-smi`（能显示显卡信息即可） |
-| 磁盘 | 至少 30GB 剩余空间 | — |
-| 内存 | 建议 16GB 以上 | — |
+| 对话 LLM | llama.cpp + Qwen3 GGUF | `127.0.0.1:8090` |
+| ASR | Xiaoman v3 + MLX Whisper | Voice Runtime `:7860` |
+| TTS | Xiaoman v3 + MLX Qwen3-TTS | Voice Runtime `:7860` |
+| 数字人 | LiveTalking + Wav2Lip | `127.0.0.1:8010` |
+| 浏览器桥 | FastAPI voice bridge | `127.0.0.1:8765` |
+| UI / 会话 | 固定版本 DeepSeek Harness | `127.0.0.1:3080` |
+| DeepSeek 云模型/搜索 | checked-in overlay 禁用 | 不可用 |
+| Codex / ChatGPT Subscription | 配置、bridge 和 provider 三层禁用 | 不可用 |
+| QQ / NapCat | 默认禁用，不属于 macOS 支持面 | 不启动 |
 
-> `nvidia-smi` 不是 NVIDIA 显卡也能显示吗？不能——如果没有 NVIDIA 显卡或驱动没装好，会提示"不是内部或外部命令"或报错。**没有 NVIDIA 显卡就装不了本项目**（模型推理依赖 CUDA GPU）。
+`--online` 只用于首次下载公开模型权重；生成仍由下载到本机的模型完成。日常不加
+`--online` 时，llama.cpp 使用 `--offline`，Hugging Face/Transformers 也进入离线模式。
 
-**显存占用**（运行时实测，约 8GB）：
+## M4 / 64GB 性能档
 
-| 模型 | 显存占用 |
-|---|---|
-| Qwen3-TTS 1.7B（fp16） | ~3.7GB |
-| FunASR Paraformer-large（fp16） | ~1GB |
-| CUDA 上下文 / 激活 / 缓冲 | ~3GB 余量 |
-| **合计** | **~8.1GB（实测 `nvidia-smi` 8101 MiB）** |
-
-> 所以 16GB 显存可流畅运行（含浏览器、系统开销余量）；8GB 显存的卡会非常紧张，不推荐。
-
-### 2. 安装 Git
-
-用来克隆仓库。下载安装：<https://git-scm.com/download/win>，一路下一步。
-
-验证：`git --version` 能输出版本号即可。
-
-### 3. 安装 Python（3.10 或更高）
-
-下载安装：<https://www.python.org/downloads/windows/>
-
-⚠️ **安装时务必勾选 "Add Python to PATH"**，否则后面 `python` 命令会找不到。
-
-验证：打开新终端，`python --version` 能输出版本号即可。
-
-### 4. 更新 NVIDIA 驱动
-
-到 <https://www.nvidia.cn/drivers/> 下载最新驱动安装。驱动太旧会导致 CUDA 相关报错。
-
-> 本项目**不需要**单独安装 CUDA Toolkit——`pip` 装的 PyTorch 自带 CUDA 运行库，只要驱动够新就行。
-
-### 5. 安装 Node.js 和 pnpm（运行 DSH 用）
-
-- Node.js：下载安装 <https://nodejs.org/>（选 LTS 版本），一路下一步。
-- 验证：`node --version`
-- pnpm（Node.js 装完后，在终端执行）：
-
-```powershell
-npm install -g pnpm
+```bash
+./scripts/run-local.sh --profile auto          # 推荐
+./scripts/run-local.sh --profile efficient     # 4B / 4K / 0.6B TTS
+./scripts/run-local.sh --profile balanced      # 8B / 8K / 0.6B TTS
+./scripts/run-local.sh --profile performance   # 14B / 16K / 1.7B TTS
 ```
 
-- 验证：`pnpm --version`
+`auto` 读取 `sysctl hw.memsize`：低于 28GB 选 efficient，28–55GB 选 balanced，
+56GB 及以上选 performance。因此 M4 / 64GB 会自动使用 Qwen3-14B Q4、16K context、
+单并行槽和 Qwen3-TTS 1.7B 4-bit。
 
-### 6. 准备 deepseek-harness（DSH）源码
+如果先想验证基础链路，不让 Wav2Lip 参与资源竞争：
 
-DSH 是开源项目，本项目是它的一个插件。**需要先有一份 DSH 源码树**（插件要装进它的源码里）：
-
-```powershell
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-pnpm install
+```bash
+./scripts/run-local.sh --online --profile efficient --no-avatar
 ```
 
-> `pnpm install` 会装几十秒到几分钟。装完后这个文件夹先放着，后面"安装 DSH 语音插件"步骤要用。
-> 记住它的路径（比如 `C:\dev\deepseek-harness`），后面一键启动要用。
+也可以用 `LOCAL_LLM_MODEL_PATH=/absolute/model.gguf` 覆盖 GGUF；覆盖时仍只在本机加载。
 
-### 7. 硬盘空间预估
+## 安装脚本做什么
 
-| 项目 | 大小 |
-|---|---|
-| 本项目代码 + 素材 | ~8MB |
-| Python 虚拟环境 + 依赖（含 PyTorch） | ~5-8GB |
-| FunASR Paraformer 模型（models/funasr/） | ~850MB |
-| Qwen3-TTS 模型 | ~2GB |
-| deepseek-harness + node_modules | ~2-4GB |
+[`scripts/setup-macos-local.sh`](scripts/setup-macos-local.sh) 会：
 
-## 二、安装本项目
+1. 要求 macOS + Apple Silicon，并检查 Xcode CLI 与 Homebrew；
+2. 安装缺失的 `gh`、`uv`、`llama.cpp`、`ffmpeg`、Node.js；
+3. 确认本仓库仍是 GitHub private；
+4. 按 [`xiaoman.local.lock.json`](xiaoman.local.lock.json) 固定
+   `chenxigary/macos-local-voice-agents` 的 commit；
+5. 从本仓库私有 Release 下载 `xiaoman-assets.zip`，先校验整体 SHA-256；
+6. 导入参考声音、Avatar、Wav2Lip/S3FD、预处理缓存和 Silero VAD，并逐项校验；
+7. 创建 Xiaoman v3 与本仓库 Python 环境；
+8. 按 [`dsh.lock.json`](dsh.lock.json) 固定 DeepSeek Harness 并安装本地插件。
 
-### 1. 克隆仓库
+只读复查，不写入任何内容：
 
-```powershell
-git clone https://github.com/beiyege-01/dsh-voice-ai-girlfriend.git
-cd dsh-voice-ai-girlfriend
+```bash
+./scripts/setup-macos-local.sh --check
 ```
 
-> 之后所有步骤都在这个文件夹（项目根目录）里进行。
+如果素材已经在移动硬盘解压，可避免重新下载：
 
-### 2. 创建 Python 虚拟环境
-
-```powershell
-python -m venv venv-speech
+```bash
+./scripts/setup-macos-local.sh --assets-from /Volumes/Transfer/xiaoman-assets
 ```
 
-激活它：
+该目录必须同时包含 `xiaoman-v3/` 和 `dsh-local/`。路径只是示例。
 
-```powershell
-venv-speech\Scripts\activate
+## 素材与模型放在哪里
+
+- Git 仓库：`assets/xiaoman/` 的参考声音、idle 素材、manifest，以及
+  `assets/bg-images/` 的现有背景视频。
+- 私有 Release `xiaoman-dsh-assets-v1`：约 305MB 的个人/运行素材和小型推理权重。
+- `.runtime/macos-local-voice-agents/`：固定的 Xiaoman v3 源码和其 Python 环境。
+- `.runtime/deepseek-harness/`：固定的 DSH 源码与 `node_modules`。
+- `models/silero-vad/`：从已校验私有 Release 导入，Git 忽略。
+- Hugging Face / llama.cpp cache：首次 `--online` 下载的大型公开模型；不进 Git 和 Release。
+
+Release 和缓存分开是刻意的：私人素材要跟随私有仓库；数 GB 的公开模型由各自官方
+仓库下载，避免 GitHub 100MB object 限制，也不复制上游模型许可证责任。
+
+## 日常操作
+
+```bash
+# 当前状态，并验证 bridge local_only=true、Codex disabled
+./scripts/run-local.sh --status
+
+# 不自动打开浏览器
+./scripts/run-local.sh --no-open
+
+# 释放整套本地进程；只处理本仓库记录且身份匹配的 PID
+./scripts/stop-local.sh
+
+# 只释放 llama.cpp 权重
+./scripts/stop-local-llm.sh
+
+# 空闲 5 分钟后让支持该能力的 llama.cpp 自动卸载模型
+LOCAL_LLM_IDLE_SLEEP_SECONDS=300 ./scripts/run-local.sh
 ```
 
-激活成功后，终端行首会出现 `(venv-speech)`。
+日志在 `logs/`，PID 记录在 `.run/`。二者都不进入 Git。
 
-### 3. 安装依赖
+## 验证
 
-```powershell
-pip install -r bridge\requirements.txt
+不启动真实模型的回归：
+
+```bash
+./scripts/smoke-check.sh
 ```
 
-> 这一步会装 PyTorch、transformers、HuggingFace speech-to-speech 等，**体积大、耗时长**（几分钟到几十分钟），耐心等待。
-> 网络慢装不动？见文末"常见问题"第 1 条（换清华镜像）。
+运行中服务的真实状态：
 
-## 三、准备模型（两个模型）
-
-### 1. STT 模型：FunASR Paraformer 中文模型（放本地 `models/` 目录）
-
-语音识别用**阿里 FunASR 中文 ASR**（Paraformer-large，专为中文设计，同音字/口音识别准确率远高于 whisper）。模型**放在仓库根的 `models/funasr/`**（约 850MB，已 gitignore 不入库）：
-
-```powershell
-pip install modelscope
-# 1) 先下载到缓存（首次）
-python -c "from modelscope import snapshot_download; snapshot_download('iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch')"
-# 2) 把模型拷到项目的 models\funasr\ 下（文件名随意，配置里指向它）
-xcopy /E /I %USERPROFILE%\.cache\modelscope\models\iic--speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch\snapshots\master models\funasr\speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch
+```bash
+./scripts/status-local.sh
+curl -fsS http://127.0.0.1:8090/health
+curl -fsS http://127.0.0.1:7860/api/voice-runtime/v1/health
+curl -fsS http://127.0.0.1:8765/api/health
+curl -fsS http://127.0.0.1:8765/api/codex/health
 ```
 
-**打断用 VAD 模型**（`models/silero-vad/silero_vad_v4.jit`，2MB）同样不入库，从 [silero-vad v4.0 tag](https://github.com/snakers4/silero-vad/tree/v4.0) 的 `files/silero_vad.jit` 获取（或使用本项目 release 附带的文件）。
+真实 WebRTC / 嘴型连续性：
 
-> 想换回 whisper（如 `openai/whisper-large-v3` 或 `-turbo`）？把 `bridge-config.json` 里 `stt.backend` 改为 `"whisper"` 并把 `model_name` 换成 whisper 模型 id 即可（桥接双后端都支持）。
-
-### 2. TTS 模型：Qwen3-TTS-12Hz-1.7B-Base（声音克隆模型，手动准备）
-
-⚠️ **必须用 Base 版本**：`Qwen/Qwen3-TTS-12Hz-1.7B-Base` 才支持"映射克隆"（用参考音频克隆音色）。网上流传的 **VoiceDesign 版本不支持克隆**，别下错了。
-
-**推荐用 ModelScope 下载**（国内快，先装 modelscope）：
-
-```powershell
-pip install modelscope
-modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-Base --local_dir ./Qwen3-TTS-12Hz-1.7B-Base
+```bash
+./scripts/test-avatar-sync.sh --json-out logs/avatar-sync-latest.json
 ```
 
-> 在**项目根目录**执行上面命令，模型会下载到 `项目根\Qwen3-TTS-12Hz-1.7B-Base\`。
+质量门不是“HTTP 能打开”这么简单：audio gap ≤100ms、video gap ≤200ms、A/V skew
+p95 ≤120ms、lip onset 绝对偏差 ≤240ms、correlation ≥0.12，并且 underflow 与补静音为 0。
 
-**文件夹叫什么名字无所谓**（叫 Base、VoiceDesign、或任何名字都行），只要里面装的是 Base 的权重文件即可——配置文件认的是**目录路径**，不认名字。
+## 当前证据与未知项
 
-## 四、准备参考音频（决定音色）
+- 本次打包前的无模型回归为 228 个 Python tests（2 skipped）、105 个 DSH 插件
+  tests 和 49 个 Host tests，全部通过；固定 DSH checkout 的完整 install、typecheck、
+  Host/Client bundle 也已通过。
+- 旧 16GB 机器上的重复对照：Avatar-only 10/10；LLM + Voice Runtime + Avatar 全栈
+  1/10。证据指向统一内存/MPS 调度争用，而不是单纯阈值问题。
+- M4 / 64GB 的完整冷启动、真实麦克风、持续对话和 5× cold/hot Avatar 组还没有跑；
+  README 中的 64GB 档是明确配置，不是已经验证的性能结论。
 
-AI 女友的声音是**克隆自你的参考音频**的。请自备一段：
+## Troubleshooting
 
-- **时长**：10 秒左右（5~20 秒都行）
-- **内容**：干净人声、无背景音乐、无杂音，**用你自己的话**自然地朗读一段内容即可（说什么都可以）
-- **文件**：命名为 `ref_audio.wav`，放到**项目根目录**（和 `bridge/` 文件夹同级）。
+### `gh auth` 或私有 Release 下载失败
 
-> 配置里的 `tts.ref_text` 必须填**你这段录音实际朗读的那句话**（逐字一致、含标点）——音色克隆质量依赖文本与录音的匹配。
-
-## 五、填写配置（复制模板 + 改 1 个必改项）
-
-在**项目根目录**执行：
-
-```powershell
-copy bridge\bridge-config.example.json bridge\bridge-config.json
+```bash
+gh auth status
+gh auth login
+gh auth setup-git
+gh repo view chenxigary/xiaoman-dsh-local --json isPrivate,visibility
 ```
 
-用记事本打开 `bridge\bridge-config.json`：
+必须看到 `isPrivate: true` / `PRIVATE`。不要为了方便把仓库或 Release 公开。
 
-### 必须改（1 处）
+### offline 模式找不到模型
 
-| 位置 | 改成什么 |
-|---|---|
-| `tts.model_name` | 你 TTS 模型的**真实目录路径**（第三部分的模型文件夹） |
+首次运行或切换到新 profile 时执行一次：
 
-路径格式两种都行（Windows 下推荐正斜杠）：
-
-```
-"C:/你的QwenTTS模型目录/Qwen3-TTS-12Hz-1.7B-Base"     ← 正斜杠
-"C:\\你的QwenTTS模型目录\\Qwen3-TTS-12Hz-1.7B-Base"    ← 双反斜杠
+```bash
+./scripts/run-local.sh --online --profile performance
 ```
 
-### 建议改（1 处）
+模型下载完成后停止，再用默认 offline 启动。
 
-| 位置 | 改成什么 |
-|---|---|
-| `tts.ref_text` | 你参考音频实际朗读的文本（见第四部分） |
+### 端口占用或启动到了别的 checkout
 
-### 不用动（已自动处理）
-
-| 配置 | 说明 |
-|---|---|
-| `media.bg_images_dir` / `task_videos_dir` | 相对路径，基于项目根自动解析 |
-| `tts.ref_audio` | 默认读取项目根的 `ref_audio.wav` |
-| `stt.*` | FunASR 中文识别配置（backend=funasr，模型在 models/funasr/），默认即可 |
-
-## 六、先验证桥接（强烈建议）
-
-启动桥接：
-
-```powershell
-bridge\start-bridge.cmd
+```bash
+lsof -nP -iTCP:8090 -iTCP:8010 -iTCP:7860 -iTCP:8765 -iTCP:3080 -sTCP:LISTEN
+./scripts/stop-local.sh
 ```
 
-会弹出一个最小化的终端窗口，等 1-2 秒后，浏览器打开：
+`stop-local.sh` 遇到 PID owner 或 command 不匹配会拒绝终止；先人工确认占用者，不要直接
+批量 kill。
 
-```
-http://127.0.0.1:8765/api/health
-```
+### UI 能打开但没有声音
 
-看到 `{"status":"ok", ...}` 就说明桥接起来了（此时模型还没加载，等首次调用才会加载）。
+先看 `logs/voice-runtime.log` 和 `logs/voice-bridge.log`，然后执行：
 
-更完整的测试（**另开一个终端**，在项目根目录、venv 激活状态下）：
-
-```powershell
-venv-speech\Scripts\python.exe bridge\smoke_tts.py --text "你好，我是小雅。"
+```bash
+./scripts/setup-macos-local.sh --check
+./scripts/status-local.sh
 ```
 
-结束后项目根目录会生成 `tts_out.wav`，播放它——**能听到克隆音色的声音，说明 TTS 链路通了**。
+不要把一次 HTTP health PASS 当作真实语音链路通过。
 
-## 七、安装 DSH 语音插件
+## Recommended next steps
 
-桥接只是"声音的服务"，对话界面和麦克风按钮在 DSH 里，需要装插件。按 [`dsh-plugin/README.md`](dsh-plugin/README.md) 的步骤操作（把 `dsh-plugin\` 整个复制进你的 deepseek-harness 源码树，注册三处、构建、重启）。
+在 M4 / 64GB 新机上建议按这个顺序推进：
 
-## 八、准备说话动画（可选）
+1. 运行 `setup-macos-local.sh --check`，保存硬件、版本和素材校验结果。
+2. 用 `--profile efficient --no-avatar --online` 做最小冷启动；验证真实麦克风、ASR、
+   首个 TTS PCM 和浏览器播放。
+3. 切换 `--profile auto --online`，确认实际解析为 performance，并记录 14B/1.7B 的
+   首 token、首音频、RTF、峰值内存和 swap。
+4. 开启 Avatar，执行至少 5 组 cold/hot `test-avatar-sync.sh`，不要用单次 PASS 晋级。
+5. 若全栈仍不稳，按 Avatar + LLM、Avatar + Voice Runtime、TTS-only、ASR-only 的顺序
+   逐项加回；优先处理资源调度/模型生命周期，不放宽质量门。
+6. 只有 14B/1.7B 全栈稳定后，再评估 30B-A3B 或更长 context；保持单并行槽。
+7. 稳定性证据完成后，再把结果和推荐默认档更新到 README；当前不要宣称 M4/64GB 已验收。
 
-模型回复时女友窗播放的说话视频**不随仓库分发**，两种方式任选（详见 [`assets/task-videos/README.md`](assets/task-videos/README.md)）：
+## 项目结构
 
-1. **手动放入**：把数字人"开口说话"的短循环视频（`.mp4/.webm/.ogg/.mov/.m4v`）放进 `assets/task-videos/`，女友窗每 30s 自动拾取；
-2. **第三方 API 回传**：实时数字人生成服务把生成的视频直接写入 `assets/task-videos/`，轮播自动切换。
-
-> 不装也不影响使用：说话时女友窗会继续播空闲动画。
-
-## 九、启动
-
-**只起桥接**（想先单独验证语音）：
-
-```powershell
-bridge\start-bridge.cmd
+```text
+bridge/                 loopback voice bridge 与 v3 adapter
+scripts/                安装、启动、状态、停止、质量测试
+config/                 local-Qwen DSH overlay 与小满 persona
+assets/xiaoman/         私人参考声音/idle 素材与 hash manifest
+dsh-plugin/             浏览器端语音/数字人插件
+dsh-host-codex/         保留的历史协议代码；本发行版执行硬关闭
+agents/codex/           保留的审计与测试代码；本发行版执行硬关闭
+docs/                   架构、实验和历史设计证据
 ```
 
-**一键全套**（桥接 + NapCatQQ + DSH Web + 浏览器）：
-
-```powershell
-set DSH_HARNESS=C:\dev\deepseek-harness
-set NAPCAT_DIR=D:\QQ\NapCat\napcat   rem 可选：NapCat 安装目录（默认此值）
-bridge\start-all.cmd
-```
-
-> - `DSH_HARNESS` 指向你第一步准备的那份 DSH 源码树（第六部分安装过插件的那个）。
-> - `start-all.cmd` 会自动：起桥接 → 起 NapCatQQ（**会关闭所有运行中的 QQ 进程**再注入小号）→ 起 DSH Web → 开浏览器。
-> - 不想自动起 NapCat（比如你要在电脑上正常用主号 QQ）：`bridge\start-all.cmd nq`（跳过 NapCat，QQ 双向聊天不工作）。
-> - 只想单独起 NapCat：`bridge\start-napcat.cmd`（会等 OneBot :3000 就绪，失败时提示去 WebUI 检查）。
-
-## 十、QQ 双向对话（可选）
-
-在 QQ 上直接和 AI 女友聊天：你的 QQ 消息会注入 DSH 对话，回复以**文本 + 小雅语音**推回你的 QQ。
-
-### 1. 装 NapCatQQ（登录 QQ 小号）
-
-- 下载 **NapCat.Shell.Windows.Node.zip**（官方推荐 Shell 版；Framework/LiteLoaderQQNT 路线官方已不推荐）
-- 解压到任意目录（如 `D:\QQ\NapCat`），用 `napcat\launcher-win10-user.bat` 启动（**会注入/拉起电脑版 QQ**，先关闭正在运行的 QQ）
-- **QQ 登录用一个小号**（防风控；注入后 QQ 窗口通常隐藏，用手机 QQ 查看消息）
-- 启动后电脑上 NapCat 的 WebUI：`http://127.0.0.1:6099`（token 看 `napcat\config\webui.json` 的 `token` 字段）
-
-### 2. 在 NapCat WebUI 配置网络
-
-WebUI → 网络配置：
-
-1. **HTTP 服务器**：添加 → 名称随意、Host `127.0.0.1`、端口 `3000`、Token 记下来（发消息用）
-2. **WebSocket 客户端**：添加 → 地址填完整 URL `ws://127.0.0.1:8765/api/qq/onebot`（**NapCat 主动连桥接，收 QQ 消息用**；不要配成 WebSocket 服务器，那会抢 8765 端口）
-
-### 3. 配置桥接
-
-`bridge-config.json` 加 `qq` 段：
-
-```json
-"qq": {
-  "enabled": true,
-  "napcat_base": "http://127.0.0.1:3000",
-  "napcat_token": "你在 WebUI 设置的 token",
-  "target_qq": 你的主号QQ号
-}
-```
-
-> `target_qq` 是**接收回复的号**（你的主号）；NapCat 登录的小号负责收发。
-
-### 4. 验证
-
-- 从桥接发测试：`POST /api/qq/send {"text":"你好","voice":true}` → 主号收到文本+语音
-- 发图片：`POST /api/qq/image {"path":"C:/path/to/a.png"}` → 主号收到图片（agent 生成图片后可直接推给你）
-- 完整双向：用手机 QQ 主号**给小号发消息** → DSH 对话出现该消息 → 回复自动以文本+语音发回主号
-
-### ⚠️ 易踩坑要点
-
-| 坑 | 说明 |
-|---|---|
-| **语音收不到** | ① 别给小号**自己**发语音（QQ 不支持自己给自己发语音）；② 语音必须 **silk 格式**（`pip install pilk`，桥接已内置转换），mp3 base64 发不出去 |
-| **QQ 事件进不来** | 必须配 **WebSocket 客户端**（NapCat 连 `ws://127.0.0.1:8765/api/qq/onebot`），配成 WebSocket 服务器会抢 8765 端口失败 |
-| **重启 NapCat 后 OneBot 服务丢失** | NapCat 的 OneBot HTTP（3000）重启后有时不自动加载 —— 都在 **WebUI 里管理**（启用/保存），不要 kill 进程重启 |
-| **WebUI 每次要 token** | 改 `napcat\config\webui.json` 的 `token` 字段为固定值即可 |
-| **回复延迟** | 延迟主要来自 LLM 生成 + 整段 TTS 合成；回复越长越慢（分段推送优化是后续可选项） |
-| **端口冲突** | 8765 桥接、3000 OneBot、6099 WebUI —— 被占时改配置并同步改桥接的 `napcat_base` |
-
-## 使用说明
-
-1. 点**麦克风**：开始连续聆听（每句自动识别发送；再点一下停止）
-2. 点**⚡**：插话（亮，默认）/ 排队（灭）——说话打断回复 vs 回复读完再自动接上
-3. 点**🎬**：显示/隐藏女友动画窗；窗口可拖宽、双击换边
-4. 点**🔊**：开/关语音朗读
-5. **QQ 对话**：手机 QQ 主号给小号发消息即可（需已按「十、QQ 双向对话」配置）
-
----
-
-# 常见问题
-
-1. **pip 装依赖太慢/超时** → 用清华镜像：
-
-   ```powershell
-   pip install -r bridge\requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-   ```
-
-2. **HuggingFace 下载模型慢/失败** → 用国内镜像：
-
-   ```powershell
-   set HF_ENDPOINT=https://hf-mirror.com
-   ```
-
-   设置后重新执行下载命令（`huggingface-cli download ...`）。
-
-3. **第一次 TTS 很慢（10~60s）** → 正常。模型首次懒加载 + 预热，之后每句约 0.5s 出音。
-
-4. **STT 偶尔识别为空** → FunASR 对超短语音/纯噪声会返回空结果被丢弃（日志见 `funasr returned empty result`）；若切换到 whisper 后端，则其 1-token 退化也会被判空，均属正常防护。
-
-5. **桥接启动但模型加载失败** → 检查 `bridge-config.json` 里 `tts.model_name` 路径是否存在（路径拼写、盘符、斜杠方向），以及显卡驱动是否够新（见前置第 4 条）。
-
-6. **桥接端口被占** → 改 `bridge-config.json` 的 `port`，并同步改插件的 `s2s.voice.bridge`（浏览器 localStorage）。
-
-7. **女友窗不显示** → 确认 `assets/` 目录存在、桥接已启动（窗口每 30s 拉一次素材列表）。
-
-8. **说话时女友窗不换视频** → `assets/task-videos/` 为空（说话动画自备，见第八部分）；没视频时会继续播空闲动画，属正常。
-
-9. **声音不像参考音频** → 检查 `ref_audio.wav` 是否清晰无杂音、`tts.ref_text` 是否与录音**逐字一致**（标点也要对）；并确认 TTS 模型是 **Base 版本**（`Qwen/Qwen3-TTS-12Hz-1.7B-Base`），VoiceDesign 版本不支持克隆。
-
----
-
-# 许可
-
-Apache-2.0（详见 LICENSE）。复用 HuggingFace speech-to-speech（Apache-2.0）与 deepseek-harness 插件框架（MIT）；`assets/` 素材为 AI 生成，仅用于演示。
+Windows/QQ/Codex 是来源项目的历史能力，不属于这个 local-only Mac 发行版的支持面。

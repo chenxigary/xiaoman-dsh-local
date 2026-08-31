@@ -1,0 +1,68 @@
+{
+  "manifestVersion": 1,
+  "surface": "stable",
+  "codexCliVersion": "0.149.0-alpha.4.1",
+  "schemaBundle": "codex_app_server_protocol.v2.schemas.json",
+  "schemaSha256": "9b3de71a5a2ffc980b792a18aa8f8dec3f85f48829560222a0264fe494b679a9",
+  "generatedSchemaRoot": "agents/codex/generated/stable",
+  "generatedSchema": "agents/codex/generated/stable/codex_app_server_protocol.v2.schemas.json",
+  "generatedSchemaTree": {
+    "root": "agents/codex/generated/stable",
+    "fileCount": 291,
+    "byteCount": 3023451,
+    "treeSha256": "bbc9b5d5b70d181099e9a8d56414644b91c57c9ef7708b60bf6ca9f84c71d2b5"
+  },
+  "generatedTypes": {
+    "root": "agents/codex/generated/stable-ts",
+    "entrypoint": "index.ts",
+    "fileCount": 663,
+    "byteCount": 376503,
+    "treeSha256": "caed8710a6413701ecd8a4521cb8d17d08c9020e84f893ff193616f1c97e4a89"
+  },
+  "requiredWire": {
+    "clientRequests": [
+      "initialize",
+      "account/read",
+      "account/login/start",
+      "account/login/cancel",
+      "model/list",
+      "thread/start",
+      "thread/resume",
+      "turn/start",
+      "turn/steer",
+      "turn/interrupt"
+    ],
+    "clientNotifications": [
+      "initialized"
+    ],
+    "serverRequests": [
+      "item/commandExecution/requestApproval",
+      "item/fileChange/requestApproval",
+      "item/permissions/requestApproval",
+      "item/tool/requestUserInput",
+      "mcpServer/elicitation/request",
+      "account/chatgptAuthTokens/refresh"
+    ],
+    "serverNotifications": [
+      "remoteControl/status/changed",
+      "account/updated",
+      "account/rateLimits/updated",
+      "account/login/completed",
+      "mcpServer/startupStatus/updated",
+      "skills/changed",
+      "thread/goal/cleared",
+      "thread/settings/updated",
+      "thread/status/changed",
+      "thread/started",
+      "thread/tokenUsage/updated",
+      "turn/started",
+      "turn/completed",
+      "item/started",
+      "item/completed",
+      "item/agentMessage/delta",
+      "serverRequest/resolved"
+    ]
+  },
+  "experimentalApi": false,
+  "requestAttestation": false
+}

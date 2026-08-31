@@ -1,0 +1,66 @@
+.root {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ds-text-tertiary, #888);
+  font-size: 11px;
+}
+
+/* The host lets its permission group shrink when trailing controls need room,
+   but the permission trigger keeps its intrinsic width and otherwise paints
+   across the first input-left controls.  The slot wrapper is the stable
+   boundary immediately following that group.  Clip only that squeezed host
+   group so its label ellipsis cannot overlap the mic/mode controls. */
+:global(div:has(+ [data-slot="conversation.input.left"])) {
+  overflow: hidden;
+}
+
+.button {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 96px;
+  border: 1px solid var(--ds-border, rgba(127, 127, 127, .28));
+  border-radius: 5px;
+  padding: 2px 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1.3;
+}
+
+.active {
+  background: var(--ds-control-fill-active, rgba(100, 150, 255, .18));
+  color: var(--ds-text-primary, inherit);
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.login {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  padding: 2px 4px;
+  background: transparent;
+  color: var(--ds-link, #6ea8fe);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.status {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

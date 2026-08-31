@@ -3,7 +3,7 @@
 Reads the Xiaoya reference wav (real Chinese speech), resamples to 16 kHz
 mono float32, sends it to POST /api/stt, and prints the result.
 Usage:
-  venv-speech\\Scripts\\python.exe smoke_stt.py [--file path] [--max-sec 120] [--format raw|wav]
+  .venv/bin/python smoke_stt.py [--file path] [--max-sec 120] [--format raw|wav]
 """
 
 import argparse
@@ -16,10 +16,16 @@ from pathlib import Path
 
 import numpy as np
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--file", default=r"C:\Users\wrpsg\Music\小雅台版).wav")
+    ap.add_argument(
+        "--file",
+        default=str(REPO_ROOT / "ref_audio.wav"),
+        help="input speech file (defaults to <repo>/ref_audio.wav)",
+    )
     ap.add_argument("--url", default="http://127.0.0.1:8765/api/stt")
     ap.add_argument("--max-sec", type=float, default=120.0)
     ap.add_argument("--format", choices=["raw", "wav"], default="raw")

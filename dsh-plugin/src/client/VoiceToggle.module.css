@@ -1,6 +1,7 @@
 .speakerOn,
 .speakerOff {
   display: inline-flex;
+  flex: 0 0 28px;
   align-items: center;
   justify-content: center;
   width: 28px;

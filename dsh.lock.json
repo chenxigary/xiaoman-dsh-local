@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "url": "https://github.com/deepseek-ai/deepseek-harness.git",
+    "commit": "47f943859bef60e4160492346772ded9b24f765a"
+  },
+  "plugin": {
+    "source": "dsh-plugin",
+    "target": "packages/client/ui-voice",
+    "packageName": "@deepseek-ai/dsh-client-ui-voice"
+  },
+  "host": {
+    "source": "dsh-host-codex",
+    "target": "packages/host/codex",
+    "packageName": "@deepseek-ai/dsh-host-codex"
+  }
+}

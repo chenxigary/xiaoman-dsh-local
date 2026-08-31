@@ -1,0 +1,46 @@
+# Xiaoman deployment overlay for a keyless, local native DSH model.
+#
+# This disables every DeepSeek-backed provider. The provider-neutral Web
+# service remains mounted because shipped presets inject its tool at startup;
+# without a provider it performs no external DeepSeek request. Codex is also
+# hard-disabled by the local-only bridge build. Every model turn therefore
+# uses the loopback llama.cpp endpoint below.
+
+- id: agent-presets
+  config:
+    default: xiaoman
+
+- id: agent-default-model
+  config:
+    provider: local-qwen
+    model: xiaoman-local
+
+- id: session-title-llm
+  config:
+    targetWords: 5
+    targetCjkCharacters: 10
+    maxInputBytes: 4096
+    maxOutputTokens: 64
+    timeoutMs: 60000
+    provider: local-qwen
+    model: xiaoman-local
+
+- id: llm-pi-ai
+  config:
+    providers:
+      local-qwen:
+        displayName: Local Qwen3 4B
+        api: openai-completions
+        baseURL: http://127.0.0.1:8090/v1
+        defaultInput: [text]
+        models:
+          - id: xiaoman-local
+            name: Xiaoman Local Qwen (hardware profile)
+            contextWindow: 16384
+            maxTokens: 2048
+
+- id: llm-deepseek
+  disabled: true
+
+- id: web-search-deepseek
+  disabled: true

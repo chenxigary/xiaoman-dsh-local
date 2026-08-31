@@ -13,18 +13,24 @@
  * only the drag handle is interactive.
  */
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-conversation's SlotMap merge for PropsRuntime resolution.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { bridgeBase } from '../bridge.ts'
 import type { VoiceInjected } from '../contract.ts'
+import type { VoiceStoreHandle } from '../agent-mode.ts'
+import type { CompanionState } from '../companion-state.ts'
+import { avatarPlaybackIsStalled, shouldLoopIdleVideo } from './companion-media.ts'
+import { connectAvatar, type AvatarConnection } from './avatar-webrtc.ts'
 import css from './CompanionWindow.module.css'
 
 const WIDTH_KEY = 's2s.voice.companionW'
 const SIDE_KEY = 's2s.voice.companionSide'
 
-const MIN_WIDTH_VW = Math.max(10, 240 / window.innerWidth * 100) // ~240px
+const VIEWPORT_WIDTH = typeof window === 'undefined' ? 1024 : window.innerWidth
+const MIN_WIDTH_VW = Math.max(10, 240 / VIEWPORT_WIDTH * 100) // ~240px
 const MAX_WIDTH_VW = 70
+const AVATAR_STALL_PROBE_MS = 4000
 
 function readWidth(): number {
   try {
@@ -46,28 +52,33 @@ function readSide(): 'left' | 'right' {
 
 /** Full props: framework runtime share + `voice` locale seat + injected face. */
 export type CompanionWindowProps =
-  PropsRuntime<'conversation.input.left'> & PropsLocale<'voice'> & VoiceInjected
+  PropsRuntime<'conversation.input.left'> & PropsStore<VoiceStoreHandle> & PropsLocale<'voice'> & VoiceInjected
 
 /**
  * @param props - framework runtime + locale + injected speaker face.
  */
-export const CompanionWindow = memo(function CompanionWindow({ speaker, companion }: CompanionWindowProps) {
-  const [visible, setVisible] = useState<boolean>(companion.visible)
+export const CompanionWindow = memo(function CompanionWindow({ speaker, avatarAudio, companionState, useStore, registerSessionMount, sessionId }: CompanionWindowProps) {
+  const visible = useStore(state => state.companion)
+  const characterId = useStore(state => state.character)
   const [widthVw, setWidthVw] = useState<number>(readWidth)
   const [side, setSide] = useState<'left' | 'right'>(readSide)
   const [speaking, setSpeaking] = useState<boolean>(speaker.speaking)
+  const [lifecycleState, setLifecycleState] = useState<CompanionState>(companionState.state)
   const [bgVideos, setBgVideos] = useState<string[]>([])
   const [taskVideos, setTaskVideos] = useState<string[]>([])
   const [bgIndex, setBgIndex] = useState(0)
   const [taskIndex, setTaskIndex] = useState(0)
+  const [avatarConnected, setAvatarConnected] = useState(false)
+  const [remoteAudio, setRemoteAudio] = useState(false)
   const idleRef = useRef<HTMLVideoElement | null>(null)
   const speakRef = useRef<HTMLVideoElement | null>(null)
+  const avatarRef = useRef<HTMLVideoElement | null>(null)
   const dragRef = useRef<{ startX: number; startWidth: number; current: number } | null>(null)
 
-  // Follow the shared companion visibility (the toggle flips it live).
   useEffect(() => {
-    return companion.subscribe(() => setVisible(companion.visible))
-  }, [companion])
+    registerSessionMount(true)
+    return () => registerSessionMount(false)
+  }, [registerSessionMount])
 
   // Load media lists from the bridge on mount, then re-poll every 30 s so
   // videos dropped into the folders are picked up without a page refresh.
@@ -79,16 +90,23 @@ export const CompanionWindow = memo(function CompanionWindow({ speaker, companio
     const load = async () => {
       try {
         const base = bridgeBase()
-        const [bg, task] = await Promise.all([
-          fetch(`${base}/api/media/bg-images`).then((r) => r.json() as Promise<{ media: { name: string; type: string }[] }>),
-          fetch(`${base}/api/media/task-videos`).then((r) => r.json() as Promise<{ videos: string[] }>),
+        const [bg, task, avatar] = await Promise.all([
+          fetch(`${base}/api/media/bg-images?character=${encodeURIComponent(characterId)}`).then((r) => r.json() as Promise<{ media: { name: string; type: string }[] }>),
+          fetch(`${base}/api/media/task-videos?character=${encodeURIComponent(characterId)}`).then((r) => r.json() as Promise<{ videos: string[] }>),
+          fetch(`${base}/api/avatar/${encodeURIComponent(characterId)}/idle`)
+            .then((r) => r.ok ? r.json() as Promise<{ media: { name: string; type: string; state?: string }[] }> : { media: [] })
+            .catch(() => ({ media: [] as { name: string; type: string; state?: string }[] })),
         ])
         if (cancelled) return
-        const json = JSON.stringify([bg.media, task.videos])
+        const json = JSON.stringify([characterId, bg.media, task.videos, avatar.media])
         if (json === mediaJsonRef.current) return
         mediaJsonRef.current = json
-        setBgVideos(bg.media.filter((m) => m.type === 'video').map((m) => `${base}/media/bg-images/${encodeURIComponent(m.name)}`))
-        setTaskVideos(task.videos.map((name) => `${base}/media/task-videos/${encodeURIComponent(name)}`))
+        const bridgeBg = bg.media.filter((m) => m.type === 'video').map((m) => `${base}/media/bg-images/${encodeURIComponent(m.name)}`)
+        const migratedBg = avatar.media.filter((m) => m.type === 'video').map((m) => `${base}/media/avatars/${encodeURIComponent(characterId)}/${encodeURIComponent(m.state ?? 'idle')}/${encodeURIComponent(m.name)}`)
+        // Xiaoman's manifest-backed asset namespace wins over legacy default
+        // media; default keeps the existing bridge list unchanged.
+        setBgVideos(characterId === 'xiaoman' && migratedBg.length > 0 ? migratedBg : bridgeBg.length > 0 ? bridgeBg : migratedBg)
+        setTaskVideos(characterId === 'xiaoman' ? [] : task.videos.map((name) => `${base}/media/task-videos/${encodeURIComponent(name)}`))
       } catch (err) {
         console.error('[ui-voice] companion media list failed:', err)
       }
@@ -99,12 +117,93 @@ export const CompanionWindow = memo(function CompanionWindow({ speaker, companio
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [])
+  }, [characterId])
 
   // Follow the speaker's speaking state.
+  useEffect(() => speaker.onSpeakingChange(() => setSpeaking(speaker.speaking)), [speaker])
+
+  useEffect(() => companionState.onStateChange(setLifecycleState), [companionState])
+
+  // Xiaoman uses LiveTalking's WebRTC output when available.  The ordinary
+  // idle clip remains underneath as a fail-soft fallback while the model is
+  // loading, reconnecting, or unavailable.
   useEffect(() => {
-    return speaker.subscribe(() => setSpeaking(speaker.speaking))
-  }, [speaker])
+    const video = avatarRef.current
+    if (!visible || characterId !== 'xiaoman' || sessionId === undefined || video === null) {
+      setAvatarConnected(false)
+      setRemoteAudio(false)
+      avatarAudio.setRemote(false)
+      return
+    }
+    const controller = new AbortController()
+    let connection: AvatarConnection | undefined
+    let cancelled = false
+    const enableRemoteAudio = async (): Promise<void> => {
+      const current = connection
+      if (current === undefined || cancelled) return
+      const enabled = await current.enableAudio()
+      if (cancelled || connection !== current) return
+      setRemoteAudio(enabled)
+      avatarAudio.setRemote(enabled)
+    }
+    const onGesture = () => { void enableRemoteAudio() }
+    window.addEventListener('pointerdown', onGesture, { capture: true })
+    window.addEventListener('keydown', onGesture, { capture: true })
+    const run = async () => {
+      while (!cancelled) {
+        try {
+          setRemoteAudio(false)
+          avatarAudio.setRemote(false)
+          connection = await connectAvatar(video, String(sessionId), controller.signal, () => {
+            if (!cancelled) setAvatarConnected(true)
+          }, () => { void enableRemoteAudio() })
+          await enableRemoteAudio()
+          let previousTime = video.currentTime
+          while (!cancelled) {
+            await new Promise(resolve => window.setTimeout(resolve, AVATAR_STALL_PROBE_MS))
+            if (cancelled || controller.signal.aborted) return
+            const currentTime = video.currentTime
+            // Background tabs may throttle media callbacks. Reset the probe
+            // baseline there instead of churning a healthy peer connection.
+            if (document.visibilityState !== 'visible') {
+              previousTime = currentTime
+              continue
+            }
+            if (!avatarPlaybackIsStalled(previousTime, currentTime, video.paused, video.readyState)) {
+              previousTime = currentTime
+              continue
+            }
+            setAvatarConnected(false)
+            setRemoteAudio(false)
+            avatarAudio.setRemote(false)
+            await connection.close()
+            connection = undefined
+            break
+          }
+        } catch (error) {
+          if (cancelled || controller.signal.aborted) return
+          console.warn('[ui-voice] Avatar unavailable; retrying:', error)
+        }
+        if (!cancelled) await new Promise(resolve => window.setTimeout(resolve, 1000))
+      }
+    }
+    setAvatarConnected(false)
+    void run()
+    return () => {
+      cancelled = true
+      controller.abort()
+      window.removeEventListener('pointerdown', onGesture, { capture: true })
+      window.removeEventListener('keydown', onGesture, { capture: true })
+      setAvatarConnected(false)
+      setRemoteAudio(false)
+      avatarAudio.setRemote(false)
+      void connection?.close()
+    }
+  }, [avatarAudio, bgVideos.length, characterId, sessionId, visible])
+
+  // If the bridge has no state-specific speaking clip, keep verified idle
+  // media visible. The lifecycle state is still observable for future assets.
+  const speakingWithFallback = speaking || lifecycleState === 'SPEAKING'
 
   // Idle layer: play bgVideos[bgIndex]; advance on ended.
   useEffect(() => {
@@ -118,25 +217,25 @@ export const CompanionWindow = memo(function CompanionWindow({ speaker, companio
   // Rotate the speaking clip once per new reply (each speaking start).
   const wasSpeakingRef = useRef(false)
   useEffect(() => {
-    if (speaking && !wasSpeakingRef.current && taskVideos.length > 0) {
+    if (speakingWithFallback && !wasSpeakingRef.current && taskVideos.length > 0) {
       setTaskIndex((i) => (i + 1) % taskVideos.length)
     }
-    wasSpeakingRef.current = speaking
-  }, [speaking, taskVideos.length])
+    wasSpeakingRef.current = speakingWithFallback
+  }, [speakingWithFallback, taskVideos.length])
 
   // Speaking layer: play taskVideos[taskIndex] while speaking; stop otherwise.
   useEffect(() => {
     const vid = speakRef.current
     const src = taskVideos[taskIndex % taskVideos.length]
     if (vid === null || src === undefined) return
-    if (speaking) {
+    if (speakingWithFallback) {
       vid.src = src
       void vid.play().catch(() => {})
     } else {
       vid.pause()
       vid.currentTime = 0
     }
-  }, [speaking, taskIndex, taskVideos])
+  }, [speakingWithFallback, taskIndex, taskVideos])
 
   const onIdleEnded = useCallback(() => {
     if (bgVideos.length > 1) setBgIndex((i) => (i + 1) % bgVideos.length)
@@ -145,11 +244,11 @@ export const CompanionWindow = memo(function CompanionWindow({ speaker, companio
   const onSpeakEnded = useCallback(() => {
     // Keep looping the speaking clip while the reply is still playing.
     const vid = speakRef.current
-    if (vid !== null && speaking) {
+    if (vid !== null && speakingWithFallback) {
       vid.currentTime = 0
       void vid.play().catch(() => {})
     }
-  }, [speaking])
+  }, [speakingWithFallback])
 
   // Drag: resize on move (persist the live value), flip side on double-click.
   const beginDrag = useCallback((clientX: number) => {
@@ -199,10 +298,13 @@ export const CompanionWindow = memo(function CompanionWindow({ speaker, companio
       aria-hidden="true"
     >
       {bgVideos.length > 0 && (
-        <video ref={idleRef} className={speaking ? `${css.video} ${css.hidden}` : css.video} muted playsInline preload="auto" onEnded={onIdleEnded} />
+        <video ref={idleRef} className={`${css.video}${speakingWithFallback ? '' : ` ${css.idleMotion}`}${avatarConnected || (speakingWithFallback && taskVideos.length > 0) ? ` ${css.hidden}` : ''}`} muted playsInline preload="auto" loop={shouldLoopIdleVideo(bgVideos.length)} onEnded={onIdleEnded} />
       )}
       {taskVideos.length > 0 && (
-        <video ref={speakRef} className={speaking ? css.video : `${css.video} ${css.hidden}`} muted playsInline preload="auto" onEnded={onSpeakEnded} />
+        <video ref={speakRef} className={!avatarConnected && speakingWithFallback ? css.video : `${css.video} ${css.hidden}`} muted playsInline preload="auto" onEnded={onSpeakEnded} />
+      )}
+      {characterId === 'xiaoman' && (
+        <video ref={avatarRef} className={`${css.video}${avatarConnected ? '' : ` ${css.hidden}`}${speakingWithFallback ? '' : ` ${css.idleMotion}`}`} muted={!remoteAudio} playsInline autoPlay />
       )}
       <div
         className={css.handle}

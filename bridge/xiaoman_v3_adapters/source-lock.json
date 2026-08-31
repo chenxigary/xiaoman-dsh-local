@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "authority": {
+    "repository": "https://github.com/kwindla/macos-local-voice-agents.git",
+    "subdirectory": "xiaoman-v3",
+    "revision": "42ba92da8e48e5a078f2263d2ca5ca0da92de497",
+    "distribution": "local-authority-revision; publish a package or service before remote consumption"
+  },
+  "consumption": {
+    "default": "xiaoman.voice-runtime.v1",
+    "endpoint": "http://127.0.0.1:7860/api/voice-runtime/v1",
+    "local_adapters": "explicit-fallback-only",
+    "automatic_fallback": false
+  },
+  "dependency_alignment": {
+    "mlx-audio": {
+      "v3_authority": "0.4.7",
+      "dsh_current": "0.5.0",
+      "status": "resolved-by-process-boundary; v3 pin is authoritative and DSH pin is explicit-fallback-only"
+    }
+  },
+  "files": [
+    {
+      "local": "bridge/xiaoman_v3_adapters/stt/providers.py",
+      "local_sha256": "8c9ca6084cb95f880b5f60e2ce5436905f40917057463f23787d0d21d47acd19",
+      "source": "voice/asr/whisper_asr.py",
+      "source_sha256": "bd3a3450f70e82928d1b1837f88d17bf96533c37282fccb85cfba3b8b33bec67",
+      "mode": "adapted-provider-with-cancellation",
+      "runtime": "explicit-local-fallback"
+    },
+    {
+      "local": "bridge/xiaoman_v3_adapters/audio/bus.py",
+      "local_sha256": "c01f80322d2ab34adda0c922f0916c9795bb586a28a7cf14b9a49a37810b1fae",
+      "source": "voice/audio_bus/bus.py",
+      "source_sha256": "c01f80322d2ab34adda0c922f0916c9795bb586a28a7cf14b9a49a37810b1fae",
+      "mode": "exact-copy",
+      "runtime": "compatibility-test-only"
+    },
+    {
+      "local": "bridge/xiaoman_v3_adapters/tts/base.py",
+      "local_sha256": "d98feac3a1d3c0219bfea908534f5f14a768896ead8eb13a6f9f3cb04ea17a78",
+      "source": "voice/tts/base.py",
+      "source_sha256": "5a8612d80d40bdeb77a351a661e5f71391b80c58702d7f7065e415164415a33d",
+      "mode": "adapted-provider-with-cancellation",
+      "runtime": "explicit-local-fallback"
+    },
+    {
+      "local": "bridge/xiaoman_v3_adapters/tts/omnivoice.py",
+      "local_sha256": "5c5220376b68fd2111681ab7cdee14f57761bfa0b4c2af2fc54c1b6e7a8b36dd",
+      "source": "voice/tts/omnivoice.py",
+      "source_sha256": "a462ed2db3f091dd89d95668ab662b85f1113288a667078983102b096c55b262",
+      "mode": "adapted-provider-with-cancellation",
+      "runtime": "explicit-local-fallback"
+    },
+    {
+      "local": "bridge/xiaoman_v3_adapters/tts/qwen3.py",
+      "local_sha256": "b38b4c7086f30a877c3f9c7335194786c94e015df05ac90b8c9515946720f494",
+      "source": "voice/tts/qwen3.py",
+      "source_sha256": "09f43ed5d05f53317fce8b351205d4bccc2d01e672a625a0d061f85af428bbc2",
+      "mode": "adapted-provider-with-cancellation",
+      "runtime": "explicit-local-fallback"
+    },
+    {
+      "local": "bridge/xiaoman_v3_adapters/tts/text_segmentation.py",
+      "local_sha256": "e35754b847a90799ead7d4c49274723a693365173c367d1c9591d8fa56060ec9",
+      "source": "voice/tts/text_segmentation.py",
+      "source_sha256": "e35754b847a90799ead7d4c49274723a693365173c367d1c9591d8fa56060ec9",
+      "mode": "exact-copy",
+      "runtime": "compatibility-test-only"
+    },
+    {
+      "local": "bridge/xiaoman_v3_adapters/vad/energy_vad.py",
+      "local_sha256": "df18be0a39a330f06fa30e085a064f722e1cf3ef8791ccdafadce25069ff9454",
+      "source": "voice/vad/energy_vad.py",
+      "source_sha256": "ec634a018462862c5687d4fa5b06c02a82a5fc62e9ce56185d7ac5ab68d7a5cd",
+      "mode": "adapted-activation-event",
+      "runtime": "compatibility-test-only"
+    }
+  ]
+}

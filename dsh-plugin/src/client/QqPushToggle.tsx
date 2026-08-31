@@ -1,26 +1,19 @@
 /**
  * QqPushToggle: composer tool-row switch for automatic QQ reply push.
  *
- * When ON (default), every settled reply is voiced to the configured QQ.
+ * When ON, every settled reply is voiced to the configured QQ.
  * When OFF, the QQBridge skips pushing (your PC chat stays silent to QQ).
- * Persisted in localStorage `s2s.voice.qqPush` ('1'/'0', default on).
+ * Persisted in localStorage `s2s.voice.qqPush` ('1'/'0', default off).
  */
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-conversation's SlotMap merge for PropsRuntime resolution.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { VoiceInjected } from './contract.ts'
+import { readQqPush, writeQqPush } from './voice/qq-settings.ts'
 import css from './QqPushToggle.module.css'
 
-const QQ_PUSH_KEY = 's2s.voice.qqPush'
-
-export function readQqPush(): boolean {
-  try {
-    return localStorage.getItem(QQ_PUSH_KEY) !== '0'
-  } catch {
-    return true
-  }
-}
+export { readQqPush }
 
 /** Full toggle props: framework runtime share + `voice` locale seat + injected face. */
 export type QqPushToggleProps =
@@ -38,17 +31,17 @@ function BubbleIcon() {
 /**
  * @param props - framework runtime + locale seats.
  */
-export const QqPushToggle = memo(function QqPushToggle({ t }: QqPushToggleProps) {
+export const QqPushToggle = memo(function QqPushToggle({ t, setQqEnabled }: QqPushToggleProps) {
   const [on, setOn] = useState<boolean>(readQqPush)
+
+  useEffect(() => {
+    setQqEnabled(on)
+  }, [on, setQqEnabled])
 
   const toggle = useCallback(() => {
     setOn((previous) => {
       const next = !previous
-      try {
-        localStorage.setItem(QQ_PUSH_KEY, next ? '1' : '0')
-      } catch {
-        // persistence unavailable — state still flips for this session
-      }
+      writeQqPush(next)
       return next
     })
   }, [])

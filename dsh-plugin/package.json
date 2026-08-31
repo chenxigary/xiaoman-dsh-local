@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-voice",
-  "description": "DSH voice chat: mic capture -> bridge STT -> conversation.send; reply TTS playback; companion animation window",
-  "version": "0.1.0-rc.1",
+  "description": "DSH voice chat with a host-owned, typed Codex delegated-turn seam",
+  "version": "0.1.0-rc.5",
   "publishConfig": {
     "access": "public"
   },
@@ -32,9 +32,11 @@
   "dsh": {
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-conversation"
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection"
       ],
       "platform": "web"
     }
@@ -45,22 +47,32 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-client-runtime": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "clsx": "^2.0.0",
-    "react": "^18.2.0"
+    "clsx": "^2.0.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-api-remotes": "workspace:^",
     "@deepseek-ai/dsh-client-locale": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^"
+    "@deepseek-ai/dsh-client-runtime": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-model-selection": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "react": "^18.2.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-api-remotes": "workspace:^",
     "@deepseek-ai/dsh-client-locale": "workspace:^",
+    "@deepseek-ai/dsh-client-runtime": "workspace:^",
+    "@deepseek-ai/dsh-client-test-runtime": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@types/react": "~18.3.1"
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
   },
   "files": [
     "lib/index.js",

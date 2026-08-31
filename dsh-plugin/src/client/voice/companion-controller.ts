@@ -1,45 +1,48 @@
+/** Renderer-only lifecycle port for the companion animation. */
+
+import type { CompanionEvent, CompanionState } from '../companion-state.ts'
+
+/** Narrow callbacks exposed to renderer components. */
+export interface CompanionRendererPort {
+  readonly state: CompanionState
+  dispatch(event: CompanionEvent): CompanionState
+  onStateChange(listener: (state: CompanionState) => void): () => void
+}
+
 /**
- * CompanionController: shared visibility state for the companion window.
- *
- * Created once in apply and injected to both the CompanionWindow (renders the
- * overlay) and the CompanionToggle (flips it), so the toggle takes effect
- * immediately without a store. Persisted to `s2s.voice.companion`.
+ * Small renderer hook source. Visibility is deliberately not kept here; the
+ * session store owns that fact and components read it through `useStore`.
  */
+export class CompanionRenderer implements CompanionRendererPort {
+  private value: CompanionState = 'IDLE'
+  private readonly listeners = new Set<(state: CompanionState) => void>()
 
-const COMPANION_KEY = 's2s.voice.companion'
-
-export class CompanionController {
-  private listeners = new Set<() => void>()
-  private value: boolean
-
-  constructor() {
-    try {
-      this.value = localStorage.getItem(COMPANION_KEY) !== '0'
-    } catch {
-      this.value = true
-    }
-  }
-
-  get visible(): boolean {
+  get state(): CompanionState {
     return this.value
   }
 
-  set visible(next: boolean) {
-    if (this.value === next) return
-    this.value = next
-    try {
-      localStorage.setItem(COMPANION_KEY, next ? '1' : '0')
-    } catch {
-      // ignore
+  dispatch(event: CompanionEvent): CompanionState {
+    const previous = this.value
+    switch (event.type) {
+      case 'listen_start': this.value = 'LISTENING'; break
+      case 'thinking': this.value = 'THINKING'; break
+      case 'speech_start': this.value = 'SPEAKING'; break
+      case 'speech_end': this.value = 'IDLE'; break
+      case 'interrupted': this.value = 'INTERRUPTED'; break
+      case 'reset': this.value = 'IDLE'; break
     }
-    for (const listener of this.listeners) listener()
+    if (this.value !== previous) {
+      for (const listener of this.listeners) listener(this.value)
+    }
+    return this.value
   }
 
-  /** Subscribe to visibility changes; returns the unsubscribe function. */
-  subscribe(listener: () => void): () => void {
+  onStateChange(listener: (state: CompanionState) => void): () => void {
     this.listeners.add(listener)
-    return () => {
-      this.listeners.delete(listener)
-    }
+    return () => { this.listeners.delete(listener) }
+  }
+
+  dispose(): void {
+    this.listeners.clear()
   }
 }

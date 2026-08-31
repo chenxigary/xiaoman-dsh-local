@@ -1,0 +1,16 @@
+{
+  "extends": "../.runtime/deepseek-harness/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../.runtime/deepseek-harness/vendor/cordis" },
+    { "path": "../.runtime/deepseek-harness/packages/core/agent" },
+    { "path": "../.runtime/deepseek-harness/packages/core/session" },
+    { "path": "../.runtime/deepseek-harness/packages/typert/protocol" },
+    { "path": "../.runtime/deepseek-harness/packages/runtime-diagnostics/invariants" },
+    { "path": "../.runtime/deepseek-harness/packages/util/brand" }
+  ]
+}

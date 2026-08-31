@@ -2,11 +2,18 @@
 # speech-to-speech (HuggingFace, Apache-2.0) brings torch / torchaudio /
 # transformers / numpy etc. transitively. Install with:
 #   pip install -r requirements.txt
+# On macOS, the regular PyPI torch wheel is selected automatically; the bridge
+# resolves device=auto to MPS or CPU when CUDA is unavailable. QQ/NapCat is an
+# optional Windows path, but pilk remains listed so the upstream QQ endpoint
+# keeps its existing contract when enabled.
 speech-to-speech==0.2.10
 fastapi
 uvicorn
+websockets
+httpx==0.28.1
 soundfile
 scipy
+mlx-audio==0.5.0
 funasr
 modelscope
-pilk
+jsonschema==4.26.0

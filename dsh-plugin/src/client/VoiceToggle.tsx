@@ -1,32 +1,11 @@
-/**
- * VoiceToggle: composer tool-row switch for reply TTS reading.
- *
- * Persists `s2s.voice.enabled` ('1'/'0', default on). The reply listener
- * re-reads it on every snapshot change, so the switch takes effect from the
- * next reply. The mic input stays available regardless (the toggle controls
- * reading only).
- */
-import { memo, useCallback, useState } from 'react'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only: pulls ui-conversation's SlotMap merge for PropsRuntime resolution.
+/** Reply-voice toggle; playback cancellation is generation-fenced. */
+import { memo, useCallback, useEffect } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { VoiceInjected } from './contract.ts'
+import type { VoiceControlProps } from './contract.ts'
 import css from './VoiceToggle.module.css'
 
-const VOICE_ENABLED_KEY = 's2s.voice.enabled'
+export type VoiceToggleProps = VoiceControlProps
 
-function readEnabled(): boolean {
-  try {
-    return localStorage.getItem(VOICE_ENABLED_KEY) !== '0'
-  } catch {
-    return true
-  }
-}
-
-/** Full toggle props: framework runtime share + `voice` locale seat + injected face. */
-export type VoiceToggleProps = PropsRuntime<'conversation.input.left'> & PropsLocale<'voice'> & VoiceInjected
-
-/** Speaker glyph with sound waves (inline, follows currentColor). */
 function SpeakerIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -37,30 +16,21 @@ function SpeakerIcon() {
   )
 }
 
-/**
- * @param props - framework runtime + locale + injected speaker (interrupt).
- */
-export const VoiceToggle = memo(function VoiceToggle({ t, speaker, abortTts }: VoiceToggleProps) {
-  const [on, setOn] = useState<boolean>(readEnabled)
-
+export const VoiceToggle = memo(function VoiceToggle({ t, useStore, actions, speaker, abortTts, registerSessionMount }: VoiceToggleProps) {
+  const on = useStore(state => state.voice)
+  useEffect(() => {
+    registerSessionMount(true)
+    return () => registerSessionMount(false)
+  }, [registerSessionMount])
   const toggle = useCallback(() => {
-    setOn((previous) => {
-      const next = !previous
-      try {
-        localStorage.setItem(VOICE_ENABLED_KEY, next ? '1' : '0')
-      } catch {
-        // persistence unavailable — state still flips for this session
-      }
-      if (!next) {
-        // Turning the reading OFF: interrupt any reply currently being read
-        // AND abort the in-flight TTS request so the bridge stops
-        // synthesizing instead of draining its queue.
-        speaker.stop()
-        abortTts()
-      }
-      return next
-    })
-  }, [speaker, abortTts])
+    const next = !on
+    actions.setVoice(next)
+    actions.bumpTtsEpoch()
+    if (!next) {
+      speaker.stop()
+      abortTts()
+    }
+  }, [abortTts, actions, on, speaker])
 
   return (
     <button

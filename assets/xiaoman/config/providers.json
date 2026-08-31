@@ -1,0 +1,23 @@
+{
+  "namespace": "xiaoman_v3_adapters",
+  "stt": {
+    "default": "mac-mlx-whisper",
+    "mac_model": "mlx-community/whisper-large-v3-turbo-asr-fp16",
+    "legacy": "legacy-whisper",
+    "sample_rate_hz": 16000
+  },
+  "tts": {
+    "default": "qwen3",
+    "qwen3_model": "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit",
+    "qwen3_language": "zh",
+    "omnivoice_model": "mlx-community/OmniVoice-bf16",
+    "omnivoice_language": "chinese",
+    "omnivoice_num_steps": 16,
+    "voice_profile": "../voice"
+  },
+  "vad": {
+    "default": "energy",
+    "sample_rate_hz": 16000,
+    "wire_events": ["speech_start", "speech_end", "speech_reopen"]
+  }
+}

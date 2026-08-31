@@ -10,6 +10,7 @@
  */
 
 const TERMINATORS = new Set(['。', '！', '？', '!', '?', '…'])
+export const MAX_SENTENCE_CHARS = 512
 
 /** True when the sentence is trivial noise (only punctuation/whitespace, or
  *  a single character) — split fragments from JSON/fence content during
@@ -27,6 +28,28 @@ export interface SentenceSplit {
   partial: string | null
 }
 
+/** Split a complete or settled trailing fragment at the bridge TTS boundary. */
+export function boundSpeechText(text: string, maxChars = MAX_SENTENCE_CHARS): string[] {
+  const value = text.trim()
+  if (value === '') return []
+  const safeMax = Number.isFinite(maxChars) ? Math.max(1, Math.floor(maxChars)) : MAX_SENTENCE_CHARS
+  const chunks: string[] = []
+  let rest = value
+  while (rest.length > safeMax) {
+    let cut = safeMax
+    for (let index = safeMax; index > Math.floor(safeMax / 2); index -= 1) {
+      if (/\s/u.test(rest[index - 1] ?? '')) {
+        cut = index
+        break
+      }
+    }
+    chunks.push(rest.slice(0, cut).trim())
+    rest = rest.slice(cut).trim()
+  }
+  if (rest !== '') chunks.push(rest)
+  return chunks
+}
+
 /** Split text into complete sentences + a trailing partial chunk. */
 export function splitSentences(text: string): SentenceSplit {
   const sentences: string[] = []
@@ -35,7 +58,7 @@ export function splitSentences(text: string): SentenceSplit {
     buf += ch
     if (TERMINATORS.has(ch)) {
       const trimmed = buf.trim()
-      if (trimmed !== '' && !isTrivial(trimmed)) sentences.push(trimmed)
+      if (trimmed !== '' && !isTrivial(trimmed)) sentences.push(...boundSpeechText(trimmed))
       buf = ''
     }
   }

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "distribution": {
+    "repository": "chenxigary/xiaoman-dsh-local",
+    "visibility": "PRIVATE"
+  },
+  "xiaomanV3": {
+    "repository": "chenxigary/macos-local-voice-agents",
+    "commit": "d4fba437269186d38e4cf6a48abbbf5472f829b1",
+    "checkout": ".runtime/macos-local-voice-agents"
+  },
+  "privateAssets": {
+    "repository": "chenxigary/xiaoman-dsh-local",
+    "tag": "xiaoman-dsh-assets-v1",
+    "name": "xiaoman-assets.zip",
+    "size": 319950385,
+    "sha256": "ad1ab0e8f8ad0682fb6c1b14a97518b55e5fa9f3fc1011402369357502fbe562",
+    "sileroVadSha256": "e1122837f4154c511485fe0b9c64455f7b929c96fbb8d79fbdb336383ebd3720"
+  },
+  "profiles": {
+    "efficient": {
+      "memory": "16GB+",
+      "llm": "Qwen/Qwen3-4B-GGUF:Q4_K_M",
+      "context": 4096,
+      "tts": "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit"
+    },
+    "balanced": {
+      "memory": "32GB+",
+      "llm": "Qwen/Qwen3-8B-GGUF:Q4_K_M",
+      "context": 8192,
+      "tts": "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit"
+    },
+    "performance": {
+      "memory": "64GB+",
+      "llm": "Qwen/Qwen3-14B-GGUF:Q4_K_M",
+      "context": 16384,
+      "tts": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"
+    }
+  }
+}

@@ -69,8 +69,8 @@ export const BridgeStatus = memo(function BridgeStatus(_props: BridgeStatusProps
     <button
       type="button"
       className={css.warn}
-      title="未检测到 voice bridge —— 语音/QQ 功能不可用。点按查看部署指南"
-      aria-label="未检测到 voice bridge —— 点按查看部署指南"
+      title="未检测到语音桥接 —— 语音/QQ 功能不可用。点按查看部署指南"
+      aria-label="未检测到语音桥接 —— 点按查看部署指南"
       onClick={() => window.open(MAIN_REPO_URL, '_blank', 'noopener')}
     >
       <WarnIcon />
