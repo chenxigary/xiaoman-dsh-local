@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -36,7 +37,12 @@ class LocalModelStackTests(unittest.TestCase):
         overlay = (ROOT / "config/dsh-local-model.patch.yml").read_text(encoding="utf-8")
 
         self.assertIn("provider: local-qwen", overlay)
-        self.assertIn("model: xiaoman-local", overlay)
+        # The agent default has to name a model the provider actually declares;
+        # a stale id here fails only at the first turn, as an opaque 4xx.
+        default_models = set(re.findall(r"^\s*model: (\S+)$", overlay, re.MULTILINE))
+        declared = set(re.findall(r"^\s*- id: (\S+)$", overlay, re.MULTILINE))
+        self.assertTrue(default_models)
+        self.assertTrue(default_models <= declared, default_models - declared)
         self.assertIn("baseURL: http://127.0.0.1:8090/v1", overlay)
         self.assertIn("- id: llm-deepseek\n  disabled: true", overlay)
         self.assertIn("- id: web-search-deepseek\n  disabled: true", overlay)
@@ -44,6 +50,24 @@ class LocalModelStackTests(unittest.TestCase):
         self.assertNotIn("- id: tool-web\n  disabled: true", overlay)
         self.assertNotIn("DEEPSEEK_API_KEY", overlay)
         self.assertIn("default: xiaoman", overlay)
+
+    def test_overlay_model_ids_match_the_router_catalog(self) -> None:
+        """The two files that name models must agree.
+
+        DSH sends the overlay's model id; bridge/model_router.py swaps
+        llama-server by matching it against config/local-models.json. An id
+        present in only one of them either offers the UI a model that cannot
+        load, or loads a model the UI can never select.
+        """
+        overlay = (ROOT / "config/dsh-local-model.patch.yml").read_text(encoding="utf-8")
+        catalog = json.loads((ROOT / "config/local-models.json").read_text(encoding="utf-8"))
+
+        overlay_ids = set(re.findall(r"^\s*- id: (\S+)$", overlay, re.MULTILINE))
+        catalog_ids = {model["id"] for model in catalog["models"]}
+        # The overlay also lists non-model rows (`- id: llm-deepseek`), so only
+        # the intersection direction that matters is checked in each case.
+        self.assertTrue(catalog_ids <= overlay_ids, catalog_ids - overlay_ids)
+        self.assertIn(catalog["default"], catalog_ids)
 
     def test_xiaoman_preset_matches_v3_personality_and_disables_thinking(self) -> None:
         preset = (ROOT / "config/agent-presets/xiaoman/agent.cordis.yml").read_text(
