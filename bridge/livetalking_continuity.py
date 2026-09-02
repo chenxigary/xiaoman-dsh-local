@@ -59,22 +59,30 @@ def install_livetalking_continuity(webrtc_module: Any) -> bool:
     original_init = track_class.__init__
     original_clear_queue = track_class.clear_queue
 
-    def silent_audio() -> Any:
-        samples = round(webrtc_module.AUDIO_PTIME * webrtc_module.SAMPLE_RATE)
+    def silent_audio(rate: int) -> Any:
+        samples = round(webrtc_module.AUDIO_PTIME * rate)
         frame = webrtc_module.AudioFrame(format="s16", layout="mono", samples=samples)
         frame.planes[0].update(bytes(samples * 2))
-        frame.sample_rate = webrtc_module.SAMPLE_RATE
+        frame.sample_rate = rate
         return frame
 
-    def patched_init(self: Any, player: Any, kind: str) -> None:
-        original_init(self, player, kind)
+    # Accept whatever the installed LiveTalking passes.  Newer builds decide the
+    # audio rate per session and call this with `sample_rate=`; a fixed
+    # (player, kind) signature raises TypeError inside handle_offer, which the
+    # browser only ever sees as "Avatar WebRTC offer failed: 500".
+    def patched_init(self: Any, player: Any, kind: str, *args: Any, **kwargs: Any) -> None:
+        original_init(self, player, kind, *args, **kwargs)
         if kind != "audio":
             return
+        # Inserted silence has to match the track, not the module fallback:
+        # newer LiveTalking documents SAMPLE_RATE as a fallback only, and a
+        # 16 kHz filler frame in a 24 kHz stream is an audible artefact.
+        rate = int(getattr(self, "sample_rate", webrtc_module.SAMPLE_RATE))
         current_queue = self._queue
         self._queue = ContinuityQueue(
             maxsize=current_queue.maxsize,
             generation=lambda: self.generation,
-            silent_audio=silent_audio,
+            silent_audio=lambda: silent_audio(rate),
         )
 
     def patched_clear_queue(self: Any) -> int:
