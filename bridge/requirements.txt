@@ -13,7 +13,11 @@ websockets
 httpx==0.28.1
 soundfile
 scipy
-mlx-audio==0.5.0
+# speech-to-speech==0.2.10 pins mlx-audio==0.4.2 on Darwin, so 0.5.0 makes this
+# file unresolvable.  The bridge venv never runs MLX inference anyway -- ASR/TTS
+# execute in the v3 voice runtime's own env (.venv-v3-tts312, mlx-audio 0.4.7) --
+# so match the pin that speech-to-speech declares.
+mlx-audio==0.4.2
 funasr
 modelscope
 jsonschema==4.26.0
