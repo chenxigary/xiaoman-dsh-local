@@ -58,11 +58,38 @@ echo "[avatar] per-session Wav2Lip warm-up: ${XIAOMAN_AVATAR_SESSION_WARMUP}"
 cd -- "${LIVETALKING_ROOT}"
 # Keep the same stride as Xiaoman v3's signed-off strict-sync baseline.
 export XIAOMAN_LIVETALKING_ROOT="${LIVETALKING_ROOT}"
+
+# Xiaoman v3's avatar-quality work added flags this repo's pinned LiveTalking
+# does not have yet, so each one is offered only when the target checkout
+# declares it -- passing an unknown flag would make argparse abort at boot.
+supports_flag() {
+  grep -q -- "'$1'" "${LIVETALKING_ROOT}/config.py" 2>/dev/null
+}
+quality_args=()
+# fixed stride 4 reuses one Wav2Lip pose across four frames; v3 measured 73% of
+# frames repeating a pose and only 1.35x idle mouth motion.  The adaptive
+# controller retunes from measured inference latency and reached 2.27-2.46x.
+if supports_flag --inference_stride_mode; then
+  quality_args+=(--inference_stride_mode "${XIAOMAN_AVATAR_STRIDE_MODE:-adaptive}")
+fi
+# The idle loop otherwise advances one source frame per rendered frame, which
+# reads as restless on a short clip.  0.5 holds each source frame twice.
+if supports_flag --idle_motion_scale; then
+  quality_args+=(--idle_motion_scale "${XIAOMAN_AVATAR_IDLE_MOTION_SCALE:-0.5}")
+fi
+if ((${#quality_args[@]})); then
+  echo "[avatar] quality flags: ${quality_args[*]}"
+else
+  echo "[avatar] pinned LiveTalking predates the v3 quality flags; using defaults"
+fi
+
 exec "${AVATAR_PYTHON}" "${AVATAR_RUNNER}" \
   --config '' \
   --transport webrtc \
   --model wav2lip \
   --batch_size "${XIAOMAN_AVATAR_BATCH_SIZE:-1}" \
   --inference_stride "${XIAOMAN_AVATAR_INFERENCE_STRIDE:-4}" \
+  --speech_rms_threshold "${XIAOMAN_AVATAR_SPEECH_RMS_THRESHOLD:-0.006}" \
+  ${quality_args[@]+"${quality_args[@]}"} \
   --avatar_id "${AVATAR_ID}" \
   --listenport "${AVATAR_PORT}"
