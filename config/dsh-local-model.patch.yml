@@ -13,7 +13,7 @@
 - id: agent-default-model
   config:
     provider: local-qwen
-    model: xiaoman-local
+    model: qwen3.6-35b-a3b
 
 - id: session-title-llm
   config:
@@ -23,20 +23,44 @@
     maxOutputTokens: 64
     timeoutMs: 60000
     provider: local-qwen
-    model: xiaoman-local
+    model: qwen3.6-35b-a3b
 
+# One provider, several models, one port.  pi-ai carries `baseURL` on the
+# provider and not on the model, so switchable local models would otherwise mean
+# one provider (and one resident copy of the weights) per model.  Instead
+# bridge/model_router.py owns :8090 and keeps exactly one llama-server alive
+# behind it, swapping the child when a request names a different id.  Model ids
+# here must match the ids in config/local-models.json.
 - id: llm-pi-ai
   config:
     providers:
       local-qwen:
-        displayName: Local Qwen3 4B
+        displayName: Local (llama.cpp)
         api: openai-completions
         baseURL: http://127.0.0.1:8090/v1
         defaultInput: [text]
+        # llama.cpp on loopback authenticates nothing, but pi-ai still demands a
+        # key for any provider it has no catalog entry for and fails the turn
+        # with "No API key for provider: local-qwen".  Naming a ref routes the
+        # lookup through credentials-local, whose layers include the launch
+        # environment -- start.sh exports this with a placeholder value.
+        apiKeyEnv: LOCAL_QWEN_API_KEY
         models:
-          - id: xiaoman-local
-            name: Xiaoman Local Qwen (hardware profile)
-            contextWindow: 16384
+          - id: qwen3.6-35b-a3b
+            name: Qwen3.6 35B-A3B · MoE · 🔓无审核 · 默认
+            contextWindow: 32768
+            maxTokens: 2048
+          - id: qwen3.8-27b
+            name: Qwen3.8 27B · 稠密Q6 · 🔓无审核 · 更细但慢
+            contextWindow: 32768
+            maxTokens: 2048
+          - id: qwen3-30b-a3b
+            name: Qwen3 30B-A3B · MoE · 🔒官方对齐 · 解码最快
+            contextWindow: 32768
+            maxTokens: 2048
+          - id: qwen3-14b
+            name: Qwen3 14B · 🔒官方对齐 · 轻量
+            contextWindow: 32768
             maxTokens: 2048
 
 - id: llm-deepseek

@@ -1,0 +1,31 @@
+{
+  "_comment": "Model catalog for bridge/model_router.py. One llama-server at a time: the router swaps the child process when a request names a different id. Ids must match the model ids in config/dsh-local-model.patch.yml.",
+  "upstreamPort": 8190,
+  "default": "qwen3.6-35b-a3b",
+  "models": [
+    {
+      "id": "qwen3.6-35b-a3b",
+      "name": "Qwen3.6 35B-A3B · MoE · 🔓无审核 · 默认",
+      "path": "~/.local/share/models/Huihui-Qwen3.6-35B-A3B-abliterated-MTP-GGUF/Huihui-Qwen3.6-35B-A3B-abliterated-ggml-model-Q4_K.gguf",
+      "contextSize": 32768
+    },
+    {
+      "id": "qwen3.8-27b",
+      "name": "Qwen3.8 27B · 稠密Q6 · 🔓无审核 · 更细但慢",
+      "path": "~/.local/share/models/Huihui-Qwen3.8-27B-abliterated-GGUF/Huihui-Qwen3.8-27B-abliterated-UD-Q6_K_XL.gguf",
+      "contextSize": 32768
+    },
+    {
+      "id": "qwen3-30b-a3b",
+      "name": "Qwen3 30B-A3B · MoE · 🔒官方对齐 · 解码最快",
+      "path": "~/models/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "contextSize": 32768
+    },
+    {
+      "id": "qwen3-14b",
+      "name": "Qwen3 14B · 🔒官方对齐 · 轻量",
+      "path": "~/models/Qwen3-14B-Q4_K_M.gguf",
+      "contextSize": 32768
+    }
+  ]
+}

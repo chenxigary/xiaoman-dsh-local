@@ -164,13 +164,48 @@ p95 ≤120ms、lip onset 绝对偏差 ≤240ms、correlation ≥0.12，并且 un
 
 ## 当前证据与未知项
 
-- 本次打包前的无模型回归为 228 个 Python tests（2 skipped）、105 个 DSH 插件
-  tests 和 49 个 Host tests，全部通过；固定 DSH checkout 的完整 install、typecheck、
-  Host/Client bundle 也已通过。
-- 旧 16GB 机器上的重复对照：Avatar-only 10/10；LLM + Voice Runtime + Avatar 全栈
-  1/10。证据指向统一内存/MPS 调度争用，而不是单纯阈值问题。
-- M4 / 64GB 的完整冷启动、真实麦克风、持续对话和 5× cold/hot Avatar 组还没有跑；
-  README 中的 64GB 档是明确配置，不是已经验证的性能结论。
+更新于 2026-09-02，机器为 M4 Max（12P+4E CPU / 40 GPU 核）、64GB。
+
+### 已验证
+
+- 无模型回归 230 个 Python tests（2 skipped）、105 个 DSH 插件 tests、49 个 Host
+  tests，全部通过；固定 DSH checkout 的 install、typecheck、Host/Client bundle 与
+  **web bundle** 均通过。
+- `status-local.sh` 七项全绿（含 `local_only=true` 与 Codex 路由已禁用）。
+- LLM 吞吐（llama.cpp b10621，全部 `-fa 1`，t/s）：
+
+  | 模型 | 体积 | pp512 | tg128 | pp@4k | tg@4k |
+  | --- | ---: | ---: | ---: | ---: | ---: |
+  | Qwen3-14B Q4_K_M | 8.4G | 483 | 49.0 | 349 | 44.5 |
+  | Qwen3-30B-A3B-2507 Q4_K_M（MoE） | 17.3G | 1491 | 116.4 | 964 | 96.3 |
+  | Qwen3.6-35B-A3B Q4_K（MoE） | 20.2G | 1429 | 94.5 | 1283 | 90.1 |
+  | Qwen3-32B Q4_K_M（稠密） | 18.4G | 201 | 21.5 | 144 | 18.2 |
+  | Qwen3.8-27B Q6_K_XL（稠密） | 23.1G | 243 | 17.3 | 198 | 17.0 |
+
+  同体积下 MoE 的解码是稠密的约 5 倍。决定体感的是 prefill 而非解码：中文语音约
+  4–5 字/秒，只需要 ~1.5 tok/s。
+- 三个调参悬崖（30B-A3B，深度 8192）：`-fa 0→1` 解码 40→85 t/s；
+  **KV 必须两边一起量化**，`f16/q8_0` 塌到 7.2 t/s、`q8_0/f16` 塌到 11.1 t/s，而
+  `q8_0/q8_0` 与 `f16/f16` 同级；`-ub 512→2048` prefill +22%。
+- 端到端（~300 token 人设、`-fa on`、q8_0 KV、`-ub 2048`、32K）：Qwen3.6-35B-A3B
+  TTFT p50 75ms、解码 89 tok/s。
+- A/V 质量门 10 对 10 对照：LLM 常驻 9/10、停掉 10/10。**中位数一致、只有尾部变化**
+  （video gap p90 66.4 vs 55.8ms，最差 157.9 vs 59.1ms）。所以在 64GB 上这不是内存
+  容量问题，而是偶发 GPU/调度争用导致 LiveTalking 音频队列饿掉一帧（20ms）。
+  作为对照，旧 16GB 机器上全栈是 1/10 —— 64GB 解决了主要矛盾，剩下尾部毛刺。
+- 修好后 lip correlation 中位 0.333（此前基线 0.242）。
+
+### 未验证
+
+- 真实麦克风、持续多轮对话、barge-in（`speech_start → 本地停音` p95 <150ms）
+  全部没有量过。barge-in 是最可能有问题的一环。
+- TTS 质量档没有 A/B：现在是 Qwen3-TTS-1.7B-4bit，同系列有 5/6/8bit 与 bf16，
+  另有 `omnivoice`（OmniVoice-bf16，已下载）可在 `providers.json` 一键切换。
+- ASR 只跑了 `mac-mlx-whisper`。FunASR/Paraformer 在旧 bridge 路径上曾把作者口音的
+  中文同音字准确率从 ~86% 提到 ~93%，但迁到 v3 registry 后这条 provider 没接回来
+  （`stt.supported` 只有 `legacy-whisper` / `mac-mlx-whisper`），这可能是全系统
+  单点收益最大的一处。
+- `docs/performance-report.md` 的 20/10/10/10 批次仍然是 0。
 
 ## Troubleshooting
 
@@ -218,18 +253,25 @@ lsof -nP -iTCP:8090 -iTCP:8010 -iTCP:7860 -iTCP:8765 -iTCP:3080 -sTCP:LISTEN
 
 ## Recommended next steps
 
-在 M4 / 64GB 新机上建议按这个顺序推进：
+第 1–4 步（安装校验、最小冷启动、性能档、5 组 Avatar 同步）已完成，结果见
+「当前证据与未知项」。剩下的按这个顺序：
 
-1. 运行 `setup-macos-local.sh --check`，保存硬件、版本和素材校验结果。
-2. 用 `--profile efficient --no-avatar --online` 做最小冷启动；验证真实麦克风、ASR、
-   首个 TTS PCM 和浏览器播放。
-3. 切换 `--profile auto --online`，确认实际解析为 performance，并记录 14B/1.7B 的
-   首 token、首音频、RTF、峰值内存和 swap。
-4. 开启 Avatar，执行至少 5 组 cold/hot `test-avatar-sync.sh`，不要用单次 PASS 晋级。
-5. 若全栈仍不稳，按 Avatar + LLM、Avatar + Voice Runtime、TTS-only、ASR-only 的顺序
-   逐项加回；优先处理资源调度/模型生命周期，不放宽质量门。
-6. 只有 14B/1.7B 全栈稳定后，再评估 30B-A3B 或更长 context；保持单并行槽。
-7. 稳定性证据完成后，再把结果和推荐默认档更新到 README；当前不要宣称 M4/64GB 已验收。
+1. **量 barge-in。** `speech_start → 本地停音` p95 <150ms 是发布目标，现在一次都没测过；
+   远端 ack/terminal 不能替代本地停音。这是整条链路上唯一完全没有数据的部分。
+2. **真实麦克风 + 持续多轮。** 跑满 `docs/performance-report.md` 的 20/10/10/10 批次，
+   填上完成次数；不要用本地单测或 import 时间冒充听感。
+3. **把 A/V 尾部收干净。** 现在 LLM 常驻时 9/10。新版 LiveTalking 已经有
+   `V3_AVATAR_STARTUP_RESERVOIR_MS` / `_LOW_WATER_MS` / `_INITIAL_BUFFER_MS`
+   三个缓冲旋钮，扫一遍找到 20/20 的设置，代价用 TTFT 增量计量。
+4. **接回 FunASR provider。** 见「未验证」里那条 ~86%→~93% 的记录；这需要在
+   `bridge/xiaoman_v3_adapters` 的 registry 里新增 provider，不只是下个模型。
+5. **TTS 质量 A/B。** 1.7B 的 4bit/8bit/bf16 与 OmniVoice-bf16，用同一段参考音频和
+   同一批文本，记录 MOS 主观分 + 首音频延迟 + 峰值内存。
+6. **决定 v3 的固定方式。** 现在 `start.sh` 默认指向工作副本
+   `~/service/macos-local-voice-agents`（固定版本缺 avatar 质量改动）。要么把
+   `xiaoman.local.lock.json` 升到新 commit 并重切私有 Release（重新生成的
+   avatar 缓存不在现有 Release 里），要么明确接受「跟随工作副本」。
+7. 稳定性证据补齐后再更新推荐默认档。
 
 ## 项目结构
 

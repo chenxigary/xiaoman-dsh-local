@@ -33,3 +33,9 @@ runtime/
 # ---- OS ----
 .DS_Store
 Thumbs.db
+
+# ---- Agent / editor state ----
+.claude/
+
+# ---- Site-local launcher settings (never commit yours) ----
+start.local.sh

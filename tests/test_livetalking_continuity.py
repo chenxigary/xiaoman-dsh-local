@@ -99,5 +99,56 @@ class ContinuityQueueTest(unittest.TestCase):
         self.assertIsInstance(video_track._queue, queue.Queue)
         self.assertNotIsInstance(video_track._queue, ContinuityQueue)
 
+    def test_installer_accepts_a_per_session_sample_rate(self) -> None:
+        """Newer LiveTalking constructs the track with `sample_rate=`.
+
+        A patch fixed at (player, kind) raises TypeError inside handle_offer,
+        which reaches the browser only as "Avatar WebRTC offer failed: 500" —
+        the avatar then never connects and the companion window silently falls
+        back to the looping idle clip. The filler frame must also follow the
+        track's rate: that module constant is documented as a fallback, and
+        16 kHz silence spliced into a 24 kHz stream is audible.
+        """
+
+        class FakeAudioFrame:
+            def __init__(self, **kwargs) -> None:
+                self.kwargs = kwargs
+                self.planes = [self]
+                self.sample_rate = None
+
+            def update(self, value: bytes) -> None:
+                self.value = value
+
+        class FakeTrack:
+            def __init__(self, player, kind, sample_rate: int = 16000) -> None:
+                del player
+                self.kind = kind
+                self.sample_rate = int(sample_rate)
+                self._generation = 2
+                self._queue = queue.Queue(maxsize=4)
+
+            @property
+            def generation(self) -> int:
+                return self._generation
+
+            def clear_queue(self) -> int:
+                return 0
+
+        class FakeModule:
+            PlayerStreamTrack = FakeTrack
+            AUDIO_PTIME = 0.02
+            SAMPLE_RATE = 16000
+            AudioFrame = FakeAudioFrame
+
+        self.assertTrue(install_livetalking_continuity(FakeModule))
+        track = FakeModule.PlayerStreamTrack(None, "audio", sample_rate=24000)
+        self.assertIsInstance(track._queue, ContinuityQueue)
+        track._queue.put_nowait((FakeFrame("real"), None, 2))
+        track._queue.get_nowait()
+        frame, _, _ = track._queue.get_nowait()
+        self.assertEqual(frame.sample_rate, 24000)
+        self.assertEqual(len(frame.value), 960)  # 20 ms of 24 kHz mono PCM16
+
+
 if __name__ == "__main__":
     unittest.main()

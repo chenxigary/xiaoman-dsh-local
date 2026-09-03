@@ -273,7 +273,12 @@ def make_git_origin(base: Path) -> tuple[Path, str]:
     run(["git", "commit", "-m", "fixture"], cwd=seed).check_returncode()
     commit = run(["git", "rev-parse", "HEAD"], cwd=seed).stdout.strip()
     origin = base / "deepseek harness origin.git"
-    run(["git", "init", "--bare", str(origin)]).check_returncode()
+    # -b main keeps the bare repository's HEAD on the only branch this fixture
+    # pushes.  Without it the bare repo inherits the host's init.defaultBranch
+    # (master on a machine that never configured one), so `git clone` produces
+    # a checkout whose HEAD is an unborn ref and bootstrap's `rev-parse HEAD`
+    # fails for reasons the real origin never reproduces.
+    run(["git", "init", "--bare", "-b", "main", str(origin)]).check_returncode()
     run(["git", "remote", "add", "origin", str(origin)], cwd=seed).check_returncode()
     run(["git", "push", "origin", "main"], cwd=seed).check_returncode()
     return origin, commit
